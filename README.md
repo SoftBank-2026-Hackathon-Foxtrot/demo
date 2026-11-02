@@ -60,27 +60,33 @@
 
 ## 시스템 아키텍처
 
-이전 설계 기준 구성입니다. 앱은 Redis 프록시, PgBouncer, S3의 주소만 알고 뒤의 저장소가 바뀌어도 앱 설정은 그대로입니다.
+회의에서 정한 구성입니다. Redis 프록시와 PgBouncer는 AWS 관리 VPC에 두고, 트래픽 비율은 오케스트레이터가 Cloudflare API로 바꿉니다. 앱은 Redis 프록시, PgBouncer, S3의 주소만 알고 뒤의 저장소가 바뀌어도 앱 설정은 그대로입니다.
 
 ```mermaid
 flowchart LR
-    U[사용자] --> E[Envoy]
-    E --> A1[공구앱 AWS]
-    E --> A2[공구앱 GCP]
-    E --> A3[공구앱 온프레]
+    U[사용자] --> E[Cloudflare Load Balancer]
+    O[오케스트레이터] -. 가중치 API .-> E
+    E -- Tunnel --> A1[유저 앱 AWS]
+    E -- Tunnel --> A2[유저 앱 GCP]
+    E -- Tunnel --> A3[유저 앱 온프레]
     A1 & A2 & A3 --> RP[Redis 프록시]
     A1 & A2 & A3 --> PB[PgBouncer]
     A1 & A2 & A3 --> S[S3 호환 스토리지]
     W[Queue worker] --> RP & PB & S
-    RP --> R[(Redis / Valkey)]
-    PB --> P[(PostgreSQL)]
+    subgraph M[AWS 관리 VPC]
+        O
+        RP
+        PB
+    end
+    RP -- Tailscale --> R[(Redis / Valkey)]
+    PB -- Tailscale --> P[(PostgreSQL)]
 ```
 
 이 레포의 `docker-compose.yml`은 앱을 혼자 띄우기 위한 구성이라 다음이 다릅니다.
 
 | 설계 | 로컬 |
 |---|---|
-| Envoy | 없음. 앱에 바로 접속 |
+| Cloudflare Load Balancer, Tunnel | 없음. 앱에 바로 접속 |
 | Redis 프록시 | 없음. Valkey에 바로 접속 |
 | RDS, Cloud SQL | PostgreSQL 컨테이너 1개 |
 | S3, Cloud Storage | S3Mock 컨테이너 1개 |
@@ -95,6 +101,8 @@ flowchart LR
 
 - `GET /readyz`: 저장소에 처음 연결되기 전과 종료 중에는 503, 그 외에는 200입니다.
 - SIGTERM을 받으면 `/readyz`가 바로 503이 되고 6초 뒤(`DRAIN_S`) 서버가 종료를 시작합니다.
+- `DRAIN_S`는 앱이 로드 밸런서에서 빠질 시간을 기다립니다. 종료 전에 오케스트레이터가 가중치를 0으로 내리면 기본값 그대로 쓸 수 있습니다. 상태 검사에만 맡기려면 Cloudflare 검사 주기(요금제별 최소 Pro 60초, Business 15초, Enterprise 10초)에 맞춰 `DRAIN_S`와 컨테이너 종료 유예를 늘려야 합니다.
+- `/readyz`는 처음 연결된 뒤에는 저장소 장애를 반영하지 않습니다. 컷오버 중 정지로 앱이 빠지는 일을 막기 위해서이고, 실제 장애 판단은 오케스트레이터가 해야 합니다.
 - 모든 응답에 `X-Served-By`(`SERVED_BY` 값)가 붙습니다.
 - 화면은 `/api/...` 상대 경로로 호출합니다.
 - `POST /api/groupbuys/{id}/join`에 `Idempotency-Key`를 보내면 같은 키의 재시도는 주문을 새로 만들지 않습니다.

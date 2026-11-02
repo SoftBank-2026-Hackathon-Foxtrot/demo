@@ -38,7 +38,7 @@ GOODS = ["치이카와 봉제 인형", "하치와레 키링", "우사기 머그�
 r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"), decode_responses=True,
                          retry=Retry(NoBackoff(), 0), max_connections=200, socket_timeout=10)
 SERVED_BY = os.environ.get("SERVED_BY", "local")
-DRAIN_S = float(os.environ.get("DRAIN_S", "6"))    # Envoy marks it unhealthy within 2 checks, 2s apart
+DRAIN_S = float(os.environ.get("DRAIN_S", "6"))    # time to leave the load balancer; see README
 _stopping = threading.Event()
 _ready = threading.Event()
 
@@ -58,7 +58,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="chiikawa group-buy", lifespan=lifespan)
-api = APIRouter()      # what the screen calls, served at /api for Envoy's routing
+api = APIRouter()      # what the screen calls, served at /api
 
 
 @app.middleware("http")
@@ -71,7 +71,7 @@ async def served_by(request: Request, call_next):
 @app.get("/readyz")
 def readyz(response: Response):
     """Latched after the first success: a DB or Redis PAUSE during a cutover must not take this
-    environment out of Envoy. A store that really fails shows up in Envoy's 5xx outlier detection."""
+    environment out of the load balancer. A store that really fails is the orchestrator's call."""
     if _stopping.is_set():
         response.status_code = 503
         return {"ready": False, "reason": "stopping"}

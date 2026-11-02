@@ -1,4 +1,4 @@
-# Runs the app on its own. The migration design puts a Redis proxy and Envoy in front;
+# Runs the app on its own. The migration design puts a Redis proxy and Cloudflare in front;
 # here the app talks to one Valkey, one PostgreSQL and one S3 stand-in directly.
 services:
   redis:
