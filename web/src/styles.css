@@ -1,0 +1,83 @@
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+@import "@fontsource/jua/index.css";
+@import "tailwindcss";
+
+/* Light only, like the reference storefront. */
+:root {
+  color-scheme: light;
+  --canvas: #fdf9e9;
+  --surface: #fffdf8;
+  --tile: #ffe3e6;
+  --ink: #2b2320;
+  --muted: #6b5f58;
+  --line: #2b2320;
+  --accent: #c93a54;
+  --on-accent: #fffdf8;
+  --accent-soft: #ffe3e6;
+  --bar: #eb7a86;
+  --stripe-a: #ffc4ca;
+  --stripe-b: #ffb6bd;
+  --nav: #fff6b3;
+  --lemon: #fff3a6;
+  --mint: #bfeae6;
+  --brown: #6b3f22;
+  --star: #fbecb4;
+}
+
+/* Radius rule: cards and sheets 16px (rounded-2xl), inputs 12px (rounded-xl), buttons full pill. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-tile: var(--tile);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-bar: var(--bar);
+  --color-nav: var(--nav);
+  --color-lemon: var(--lemon);
+  --color-mint: var(--mint);
+  --color-brown: var(--brown);
+  --font-sans: "Pretendard Variable", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --font-display: "Jua", "Pretendard Variable", "Malgun Gothic", sans-serif;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  color: var(--ink);
+  font-family: var(--font-sans);
+  word-break: keep-all;
+  background-color: var(--canvas);
+  /* The star field of the reference: two offset rows of one star. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cg fill='%23fbf1c9'%3E%3Cpath id='s' d='M30 12l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z'/%3E%3Cpath d='M90 72l5 11 12 1-9 8 3 12-11-6-11 6 3-12-9-8 12-1z'/%3E%3C/g%3E%3C/svg%3E");
+}
+
+.stripes {
+  background: repeating-linear-gradient(90deg, var(--stripe-a) 0 28px, var(--stripe-b) 28px 56px);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

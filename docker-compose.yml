@@ -1,0 +1,55 @@
+# Runs the app on its own. The migration design puts a Redis proxy and Envoy in front;
+# here the app talks to one Valkey, one PostgreSQL and one S3 stand-in directly.
+services:
+  redis:
+    image: valkey/valkey:8
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: appdb
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: apppw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  pgbouncer:
+    build: ./pgbouncer
+    networks:
+      default:
+        aliases: [db-proxy.internal]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  s3:
+    image: adobe/s3mock:4.7.0
+
+  app:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --timeout-keep-alive 120
+    environment: &appenv
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://app:apppw@db-proxy.internal:6432/appdb
+      S3_ENDPOINT: http://s3:9090
+      SERVED_BY: local
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    ports: ["8000:8000"]
+    stop_grace_period: 35s
+    depends_on: [redis, pgbouncer, s3]
+
+  worker1:
+    build: .
+    command: python -m app.worker --name w1 --reconciler
+    environment: *appenv
+    depends_on: [app]
+
+  worker2:
+    build: .
+    command: python -m app.worker --name w2
+    environment: *appenv
+    depends_on: [app]

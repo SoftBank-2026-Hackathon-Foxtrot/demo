@@ -1,0 +1,6 @@
+redis>=5.0
+fastapi>=0.110
+uvicorn>=0.29
+psycopg[binary]>=3.2
+boto3>=1.34
+uvloop>=0.19; sys_platform != "win32"
