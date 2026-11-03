@@ -7,6 +7,6 @@ const app = "http://localhost:8000";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
-    proxy: { "/api": app },
+    proxy: { "/api": { target: app, ws: true } },
   },
 });

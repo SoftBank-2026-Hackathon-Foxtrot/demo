@@ -1,0 +1,68 @@
+# Isolated Redis cutover demo, in addition to docker-compose.yml.
+# docker compose -p chiikawa-live -f docker-compose.yml -f compose.migration.yml up -d --build
+# Requires redis-migrator checkout beside demo. Does not alter that checkout.
+services:
+  redis:
+    command: ["valkey-server", "--requirepass", "adminpw", "--user", "app", "on", ">apppw", "~*", "&*", "+@all"]
+  redis-gcp:
+    image: valkey/valkey:8
+    command: ["valkey-server", "--requirepass", "adminpw", "--user", "app", "on", ">apppw", "~*", "&*", "+@all"]
+  proxy:
+    build: ${REDIS_MIGRATOR_PATH:-../redis-migrator}/proxy
+    entrypoint: ["statemig-proxy"]
+    environment:
+      STATEMIG_ENDPOINTS: aws=redis://app:apppw@redis:6379,gcp=redis://app:apppw@redis-gcp:6379
+      STATEMIG_ACTIVE: aws
+      STATEMIG_CONTROL_FILE: /state/control.json
+      STATEMIG_ADMIN_TOKEN: local-live-admin
+      STATEMIG_CLIENTS: app:app-proxy-pw:app,worker:worker-proxy-pw:worker
+    volumes: ["live-control:/state"]
+    ports: ["127.0.0.1:18700:7000"]
+    depends_on: [redis, redis-gcp]
+  syncworker:
+    build: ${REDIS_MIGRATOR_PATH:-../redis-migrator}/proxy
+    entrypoint: ["statemig-syncworker"]
+    environment:
+      STATEMIG_ENDPOINTS: aws=redis://default:adminpw@redis:6379,gcp=redis://default:adminpw@redis-gcp:6379
+      STATEMIG_ADMIN_TOKEN: local-live-admin
+    depends_on: [redis, redis-gcp]
+  statemig:
+    build: ${REDIS_MIGRATOR_PATH:-../redis-migrator}
+    command: uvicorn statemig.api:app --host 0.0.0.0 --port 8090
+    environment:
+      STATEMIG_ENDPOINTS: aws=redis://default:adminpw@redis:6379,gcp=redis://default:adminpw@redis-gcp:6379
+      STATEMIG_PROXY: http://proxy:7000
+      STATEMIG_SYNCWORKER: http://syncworker:7100
+      STATEMIG_CONTROL_FILE: /state/control.json
+      STATEMIG_APP_USER: app
+      STATEMIG_ADMIN_TOKEN: local-live-admin
+    volumes: ["live-control:/state"]
+    ports: ["127.0.0.1:18900:8090"]
+    depends_on: [proxy, syncworker]
+  app:
+    environment:
+      REDIS_URL: redis://app:app-proxy-pw@proxy:6379
+      SERVED_BY: aws
+    ports: !override ["127.0.0.1:18800:8000"]
+    depends_on: [redis, pgbouncer, s3, proxy]
+  app-gcp:
+    build: .
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 120 --ws-max-size 4096
+    environment:
+      REDIS_URL: redis://app:app-proxy-pw@proxy:6379
+      DATABASE_URL: postgresql://app:apppw@db-proxy.internal:6432/appdb
+      S3_ENDPOINT: http://s3:9090
+      SERVED_BY: gcp
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    ports: ["127.0.0.1:18801:8000"]
+    stop_grace_period: 35s
+    depends_on: [redis, pgbouncer, s3, proxy]
+  worker1:
+    environment:
+      REDIS_URL: redis://worker:worker-proxy-pw@proxy:6379
+  worker2:
+    environment:
+      REDIS_URL: redis://worker:worker-proxy-pw@proxy:6379
+volumes:
+  live-control:

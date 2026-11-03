@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { forgetSession, listGroupBuys, listOrders, logout, me, savedSession, SessionLost, type GroupBuy, type Order } from "./api";
-import { Carousel, GoodsGrid, isClosing, Skeleton } from "./GoodsList";
+import { GoodsGrid, isClosing, Skeleton } from "./GoodsList";
 import { JoinSheet } from "./JoinSheet";
 import { Login } from "./Login";
 import { Orders } from "./Orders";
-import { Announcement, Connection, DemoNotice, Header, NavBar, type View } from "./TopBar";
-
-const FEATURED = 5;
+import { LiveRoom } from "./LiveRoom";
+import { Announcement, Connection, Header, NavBar, type View } from "./TopBar";
 
 export function App() {
   const [sid, setSid] = useState<string | null>(savedSession);
   const [name, setName] = useState<string | null>(null);
+  const leave = useCallback(() => { forgetSession(); setSid(null); setName(null); }, []);
 
   useEffect(() => {
     if (!sid) return;
@@ -30,7 +30,7 @@ export function App() {
       key={sid}
       sid={sid}
       name={name}
-      onLeave={() => { forgetSession(); setSid(null); setName(null); }}
+      onLeave={leave}
       onLogout={() => { void logout(sid); setSid(null); setName(null); }}
     />
   );
@@ -41,7 +41,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [offline, setOffline] = useState(false);
   const [picked, setPicked] = useState<GroupBuy | null>(null);
-  const [view, setView] = useState<View>("all");
+  const [view, setView] = useState<View>("live");
   const [query, setQuery] = useState("");
 
   const fail = useCallback((e: unknown) => {
@@ -91,19 +91,16 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
       <Header name={name} count={orders?.length ?? 0} onCart={() => setView("orders")} onLogout={onLogout} />
       <NavBar view={view} query={query} onView={setView} onQuery={(v) => { setQuery(v); if (view === "orders") setView("all"); }} />
       {offline && <Connection />}
-      <DemoNotice />
-      <main className="pb-16">
+      <main className="shop-content pb-16">
+        {goods && <div hidden={view !== "live" || searching}><LiveRoom sid={sid} name={name} goods={goods} onPick={setPicked} onSessionLost={onLeave} /></div>}
         {view === "orders" ? (
           <Orders sid={sid} orders={orders} />
         ) : !goods ? (
           <Skeleton />
-        ) : view === "closing" || searching ? (
-          <GoodsGrid goods={shown} title={view === "closing" ? "마감 임박" : "검색 결과"} onPick={setPicked} />
+        ) : view === "closing" || searching || view === "all" ? (
+          <GoodsGrid goods={shown} title={view === "closing" ? "마감 임박" : searching ? "검색 결과" : "전체 상품"} onPick={setPicked} />
         ) : (
-          <div className="flex flex-col gap-12">
-            <Carousel items={goods.slice(0, FEATURED)} onPick={setPicked} />
-            {goods.length > FEATURED && <GoodsGrid goods={goods.slice(FEATURED)} title="전체 상품" onPick={setPicked} />}
-          </div>
+          <div className="more-goods"><div className="section-kicker">THE LITTLE COLLECTION</div><GoodsGrid goods={goods} title="다음으로 만나볼 친구들" onPick={setPicked} /></div>
         )}
       </main>
       <JoinSheet
@@ -118,6 +115,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
           void refreshGoods();
         }}
       />
+      <footer className="shop-footer"><strong>치이카와 LIVE</strong><span>작고 귀여운 것들을 좋아하는 우리들의 공구방</span><small>해커톤 시연용 · 비공식 데모 · 실제 결제 및 배송 없음</small></footer>
     </div>
   );
 }

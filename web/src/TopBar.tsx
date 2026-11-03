@@ -1,7 +1,7 @@
 import { CaretLeft, CaretRight, MagnifyingGlass, PawPrint, ShoppingCart, SignIn, SignOut, WarningCircle } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 
-const NOTICES = ["발표 시연용 공동구매 앱이에요", "한 번에 5개까지 참여할 수 있어요", "주문 결과는 내 주문에서 바로 확인할 수 있어요"];
+const NOTICES = ["작고 귀여운 마음이 모이는 곳, 치이카와 LIVE", "오늘의 친구들을 라이브 공구방에서 만나보세요", "한 번에 5개까지, 좋아하는 친구와 함께해요"];
 
 export function Announcement() {
   const [i, setI] = useState(0);
@@ -21,7 +21,7 @@ export function Brand({ className = "" }: { className?: string }) {
       <span className="grid size-13 place-items-center rounded-full border-2 border-accent bg-surface text-accent md:size-16">
         <PawPrint size={32} weight="fill" />
       </span>
-      <span className="text-2xl md:text-[32px]">치이카와 공구</span>
+      <span className="text-2xl md:text-[32px]">치이카와 <span className="brand-live">LIVE</span></span>
     </span>
   );
 }
@@ -36,7 +36,7 @@ function Circle({ label, tint, onClick, badge, children }: { label: string; tint
   );
 }
 
-type View = "all" | "closing" | "orders";
+type View = "live" | "all" | "closing" | "orders";
 
 export function Header({ name, count, onCart, onLogout }: { name: string | null; count: number; onCart?: () => void; onLogout?: () => void }) {
   return (
@@ -60,7 +60,7 @@ export function Header({ name, count, onCart, onLogout }: { name: string | null;
 }
 
 export function NavBar({ view, query, onView, onQuery }: { view: View; query: string; onView: (v: View) => void; onQuery: (q: string) => void }) {
-  const items: [View, string][] = [["all", "전체 상품"], ["closing", "마감 임박"], ["orders", "내 주문"]];
+  const items: [View, string][] = [["live", "라이브 공구방"], ["all", "전체 상품"], ["closing", "마감 임박"], ["orders", "내 주문"]];
   return (
     <nav className="bg-nav">
       <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-center gap-x-8 gap-y-1 px-4 py-2 md:min-h-11">

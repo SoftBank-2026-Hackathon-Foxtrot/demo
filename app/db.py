@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS orders(request_id TEXT PRIMARY KEY, groupbuy_id INTEG
                                   title TEXT, price INTEGER, confirmed_ms BIGINT, receipt_key TEXT);
 CREATE TABLE IF NOT EXISTS notifications(ref TEXT PRIMARY KEY, kind TEXT, sent_ms BIGINT);
 CREATE TABLE IF NOT EXISTS stats(name TEXT PRIMARY KEY, value BIGINT);
+CREATE TABLE IF NOT EXISTS chat_messages(id TEXT PRIMARY KEY, room TEXT NOT NULL, user_id TEXT NOT NULL,
+                                         body TEXT NOT NULL, created_ms BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS chat_room_time ON chat_messages(room, created_ms, id);
 CREATE INDEX IF NOT EXISTS jr_status ON join_requests(status, enqueued_ms);
 CREATE INDEX IF NOT EXISTS jr_user ON join_requests(user_id, created_ms);
 """
@@ -45,9 +48,12 @@ def connect() -> psycopg.Connection:
 
 def init_schema(db: psycopg.Connection, reset: bool = False):
     with db.transaction():
+        # IF NOT EXISTS alone races on pg_type when several ASGI workers boot
+        # against a fresh database. Transaction lock also covers multiple apps.
+        db.execute("SELECT pg_advisory_xact_lock(72413820)")
         db.execute(SCHEMA)
         if reset:
-            db.execute("TRUNCATE groupbuys, join_requests, orders, notifications, stats")
+            db.execute("TRUNCATE groupbuys, join_requests, orders, notifications, stats, chat_messages")
 
 
 def bump(db: psycopg.Connection, name: str, n: int = 1):

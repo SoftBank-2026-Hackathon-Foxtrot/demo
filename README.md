@@ -1,8 +1,14 @@
 ![공구앱 메인화면](docs/home.png)
 
-# 치이카와 공구앱 (초안)
+# 치이카와 LIVE 공구앱
 
-이전 대상이 되는 데모앱입니다. 로그인, 공구 목록, 참여 주문, 영수증 조회 기능이 있습니다.
+이전 대상이 되는 데모앱입니다. 라이브 홈쇼핑 콘셉트의 화면, Redis Pub/Sub 기반 실시간 채팅, 로그인, 공구 목록, 참여 주문, 영수증 조회 기능이 있습니다. 방송 무대는 생성 이미지로 구성한 데모이며 실제 영상 스트리밍은 아닙니다.
+
+## 라이브 채팅과 이전 시연
+
+`/api/live/chat` WebSocket은 첫 프레임의 세션으로 인증합니다. 채팅은 PostgreSQL에 보관하고 Redis `live:chiikawa-live` 채널로 전달합니다. 각 브라우저는 별도 Redis 구독을 가지며 발행·인증에는 다른 연결을 사용합니다. 앱 인스턴스가 달라도 같은 방으로 전달됩니다. 최근 100개 대화 복원, 메시지 ID 중복 방지, 전송 확인·수동 재시도, 자동 재접속, 분당 60개 제한을 지원합니다.
+
+Redis 프록시와 AWS/GCP 역할의 앱 두 대를 연결하는 실행법·검증 결과는 [docs/live.md](docs/live.md)에 있습니다. 화면 아래 ‘연결 정보’에서 앱·WebSocket 연결 ID·재접속 횟수·실시간 수신 수를 볼 수 있습니다.
 
 - 백엔드: FastAPI, 큐 worker(Python)
 - 화면: React, Vite
@@ -14,6 +20,7 @@
 |---|---|---|---|---|
 | 로그인·로그아웃 | `POST /api/login/{uid}`, `POST /api/logout` | `session:{sid}` 생성·삭제 | | |
 | 로그인 확인 | 아래 API 중 worker를 뺀 사용자 API 전부 | `session:{sid}` 조회, TTL 연장 | | |
+| 라이브 채팅 | `WS /api/live/chat` | 세션 확인, 요청 제한, Pub/Sub 구독·발행 | `chat_messages` 저장·최근 기록 조회 | |
 | 공구 목록 | `GET /api/groupbuys` | | `groupbuys` 조회 | |
 | 공구 상세 | `GET /api/groupbuys/{id}` | `cache:groupbuy:{id}` 조회, 없으면 저장 | 캐시에 없을 때 `groupbuys` 조회 | |
 | 가격 변경 | `POST /groupbuys/{id}/price` | `cache:groupbuy:{id}` 삭제 | `groupbuys` 수정 | |
@@ -38,6 +45,7 @@
 | `orders` | 확정된 주문, 영수증 키 |
 | `notifications` | 알림 기록 |
 | `stats` | 재처리 횟수 같은 내부 집계 |
+| `chat_messages` | 방송 채팅 ID·닉네임·본문·시각. seed 시 함께 초기화 |
 
 **Redis**
 

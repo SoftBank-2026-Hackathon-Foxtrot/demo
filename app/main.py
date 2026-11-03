@@ -12,6 +12,7 @@ Object storage holds order receipts under keys that never change.
 Join flow: INSERT join_requests(status=QUEUED) → XADD q:join → "accepted".
 The worker decides CONFIRMED / SOLD_OUT inside one DB transaction, then stores the receipt.
 """
+import asyncio
 import json
 import os
 import signal
@@ -27,7 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 
-from . import receipts
+from . import chat, receipts
 from .db import close_job, connect, init_schema
 
 SESSION_TTL, CACHE_TTL, RL_WINDOW, RL_LIMIT = 1800, 300, 60, 1000
@@ -46,6 +47,7 @@ _ready = threading.Event()
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """SIGTERM: /readyz turns 503 at once, and the server only starts stopping after the drain."""
+    await asyncio.to_thread(lambda: init_schema(connect()))
     previous = signal.getsignal(signal.SIGTERM)
 
     def on_term(signum, frame):
@@ -58,6 +60,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="chiikawa group-buy", lifespan=lifespan)
+app.include_router(chat.router)
 api = APIRouter()      # what the screen calls, served at /api
 
 

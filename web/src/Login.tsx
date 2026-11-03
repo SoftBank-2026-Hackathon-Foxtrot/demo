@@ -1,6 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { login } from "./api";
-import { Announcement, DemoNotice, Header } from "./TopBar";
+import { Announcement, Header } from "./TopBar";
 
 export function Login({ onDone }: { onDone: (sid: string, name: string) => void }) {
   const id = useId();
@@ -29,12 +29,12 @@ export function Login({ onDone }: { onDone: (sid: string, name: string) => void 
     <div className="min-h-[100dvh]">
       <Announcement />
       <Header name={null} count={0} />
-      <div className="h-3 bg-nav" />
-      <DemoNotice />
-      <main className="mx-auto w-full max-w-md px-4 pb-16">
-        <div className="rounded-2xl border-2 border-ink bg-[var(--tile)] p-6">
-          <h1 className="font-display text-3xl leading-tight text-accent">닉네임으로 입장하기</h1>
-          <p className="mt-2 text-muted">닉네임만 정하면 바로 공구에 참여할 수 있어요.</p>
+      <main className="login-layout">
+        <div className="login-visual"><img src="/live-studio.png" alt="치이카와와 친구들이 기다리는 작은 공구방" /><p>좋아하는 마음이 모이면, 더 귀여워!</p></div>
+        <div className="login-form">
+          <span className="eyebrow"><span className="live-dot" /> CHIIKAWA LIVE</span>
+          <h1>어서 와요,<br />우리들의 작은 공구방</h1>
+          <p>치이카와 친구들과 굿즈도 구경하고, 수다도 떨어요.<br />닉네임 하나면 준비 끝!</p>
           <form onSubmit={submit} noValidate className="mt-6 flex flex-col gap-2">
             <label htmlFor={id} className="text-sm font-semibold">닉네임</label>
             <input
@@ -50,9 +50,10 @@ export function Login({ onDone }: { onDone: (sid: string, name: string) => void 
             />
             {error && <p id={`${id}-error`} role="alert" className="text-sm font-semibold text-accent">{error}</p>}
             <button disabled={busy} className="mt-3 h-13 rounded-full border-2 border-ink bg-accent font-bold text-on-accent transition active:scale-[0.98] disabled:opacity-60">
-              {busy ? "입장하는 중" : "입장하기"}
+              {busy ? "입장하는 중" : "라이브 공구방 입장하기 →"}
             </button>
           </form>
+          <p className="login-note">해커톤 시연을 위한 비공식 데모예요.<br />실제 결제와 배송은 이루어지지 않아요.</p>
         </div>
       </main>
     </div>

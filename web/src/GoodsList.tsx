@@ -33,16 +33,17 @@ function statusOf(g: GroupBuy, now: number) {
   return s >= 60 ? `${Math.floor(s / 60)}분 ${s % 60}초 뒤 마감` : `${s}초 뒤 마감`;
 }
 
-/** public/goods/<id>.png when the team has a licensed photo, otherwise a stand-in icon. */
+/** Explicit image registry avoids requesting nonexistent photos for icon-only items. */
+const GOODS_PHOTOS: Record<number, string> = { 0: "/live-studio.png" };
 export function Tile({ id, size, className = "" }: { id: number; size: number; className?: string }) {
   const [broken, setBroken] = useState(false);
   const Glyph = ICONS[id % ICONS.length];
   return (
     <span className={`grid place-items-center overflow-hidden rounded-xl ${className}`}>
-      {broken ? (
+      {broken || !GOODS_PHOTOS[id] ? (
         <Glyph size={size} weight="duotone" className="text-accent" />
       ) : (
-        <img src={`/goods/${id}.png`} alt="" onError={() => setBroken(true)} className="size-full object-cover" />
+        <img src={GOODS_PHOTOS[id]} alt="" onError={() => setBroken(true)} className="size-full object-cover" />
       )}
     </span>
   );
