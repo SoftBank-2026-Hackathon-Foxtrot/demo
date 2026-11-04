@@ -144,6 +144,17 @@ npm install && npm run dev
 | `S3_BUCKET`, `S3_FALLBACK_BUCKET` | `receipts-aws`, `receipts-gcp` | 영수증 버킷 |
 | `SERVED_BY` | `local` | `X-Served-By` 값 |
 | `DRAIN_S` | `6` | 종료 전 대기 시간(초) |
+| `OBJECT_MIGRATION_SERVER` | 없음 | object-migration 서버 주소. 있으면 영수증 버킷 이전을 따라감 (아래) |
+| `OBJECT_MIGRATION_ID` 또는 `OBJECT_MIGRATION_ID_FILE` | 없음 | 따라갈 이전 ID. 파일은 1초마다 다시 읽음 |
+| `STORAGE_<KIND>_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, `_ENDPOINT` | 없음 | 이전 경로의 버킷 종류(`S3`, `GCS`, `SEAWEEDFS`)별 앱 자격 증명과 주소. GCS는 S3 호환 API와 HMAC 키 |
+
+### 영수증 버킷 이전 따라가기
+
+[object-migration](https://github.com/SoftBank-2026-Hackathon-Foxtrot/object-migration)의 앱 저장소 모듈(`docs/app-storage.md`)을 `app/objroute.py`로 구현했습니다. 모든 프로세스(API worker, 큐 worker)가 1초마다 경로를 묻고, 쓰는 버킷과 읽는 순서를 그대로 따릅니다. 서버는 살아 있는 앱이 모두 새 경로를 적용해야 다음 단계로 넘어갑니다. 이전 중 경로를 5초 넘게 갱신하지 못하면 영수증 요청을 실패시킵니다. 이전 ID가 없으면 `S3_BUCKET`, `S3_FALLBACK_BUCKET`을 씁니다. 앱은 영수증을 지우지 않아 삭제 기록은 구현하지 않았습니다.
+
+**전환 전에 앱이 이전 ID를 알고 있어야 합니다.** 서버는 한 번도 묻지 않은 앱을 기다리지 않습니다. 이전을 만든 직후 ID를 `OBJECT_MIGRATION_ID_FILE`에 쓰거나, 그 ID로 앱을 다시 배포합니다.
+
+검증: 실제 object-migration 서버(fake engine)와 s3mock으로 앱 프로세스 2개가 50ms마다 영수증을 쓰고 읽는 중에 freeze → switch → resume → finalize. 쓰기 760건, 읽기 760건 실패 0건. 전환 뒤 원본에 쓴 영수증 0건, 전환 전 대상에 쓴 영수증 0건.
 
 ## 초안이라 없는 것
 
