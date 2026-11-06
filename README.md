@@ -1,3 +1,7 @@
+![치이카와 공구앱 아키텍처](docs/architecture.png)
+
+> 파란 선은 사용자 요청과 플랫폼 지시, 회색 선은 데이터 연결, 점선은 이전 중 복사입니다. 앱은 Redis 프록시, PgBouncer, 오브젝트 스토리지의 고정 주소만 알고, DB 전환 때는 control-plane의 지시로 업무를 멈춥니다.
+
 ![공구앱 메인화면](docs/home.png)
 
 # 치이카와 LIVE 공구앱
