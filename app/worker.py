@@ -26,6 +26,7 @@ from redis.retry import Retry
 
 from . import receipts
 from .db import bump, close_job, connect
+from .workload import workload
 
 log = logging.getLogger("worker")
 GROUP = "workers"
@@ -164,31 +165,35 @@ class Worker:
                 if "BUSYGROUP" not in str(e):
                     raise
 
+    def step(self):
+        for stream in ("q:join", "q:notify"):   # one stream per call: the proxy routes per command
+            res = self.r.xreadgroup(GROUP, self.name, {stream: ">"}, count=50, block=500)
+            for s, msgs in res or []:
+                self.consume(s, msgs)
+        t = time.time()
+        if t - self.last["claim"] > 5:
+            self.last["claim"] = t
+            for stream in ("q:join", "q:notify"):
+                _, msgs, _ = self.r.xautoclaim(stream, GROUP, self.name, min_idle_time=5000, count=50)
+                self.consume(stream, msgs, reclaimed=True)
+        if t - self.last["due"] > 1:
+            self.last["due"] = t
+            self.move_due(keys=["q:delayed", "q:notify"], args=[now_ms()])
+        if self.reconciler and t - self.last["requeue"] > 3:
+            self.last["requeue"] = t
+            self.requeue_stale()
+            self.fill_receipts()
+        if self.reconciler and t - self.last["restore"] > 5:
+            self.last["restore"] = t
+            self.restore_scheduled()
+
     def run(self):
-        last_claim = last_due = last_requeue = last_restore = 0.0
+        self.last = dict.fromkeys(("claim", "due", "requeue", "restore"), 0.0)
         self.ensure_groups()
         while True:
             try:
-                for stream in ("q:join", "q:notify"):   # one stream per call: the proxy routes per command
-                    res = self.r.xreadgroup(GROUP, self.name, {stream: ">"}, count=50, block=500)
-                    for s, msgs in res or []:
-                        self.consume(s, msgs)
-                t = time.time()
-                if t - last_claim > 5:
-                    last_claim = t
-                    for stream in ("q:join", "q:notify"):
-                        _, msgs, _ = self.r.xautoclaim(stream, GROUP, self.name, min_idle_time=5000, count=50)
-                        self.consume(stream, msgs, reclaimed=True)
-                if t - last_due > 1:
-                    last_due = t
-                    self.move_due(keys=["q:delayed", "q:notify"], args=[now_ms()])
-                if self.reconciler and t - last_requeue > 3:
-                    last_requeue = t
-                    self.requeue_stale()
-                    self.fill_receipts()
-                if self.reconciler and t - last_restore > 5:
-                    last_restore = t
-                    self.restore_scheduled()
+                with workload.working():   # no new batch while the platform holds the work
+                    self.step()
             except (redis.RedisError, OSError, psycopg.Error) as e:
                 log.warning("store error: %s", e)
                 try:
@@ -210,6 +215,7 @@ def main():
             break
         except psycopg.Error:
             time.sleep(1)
+    workload.start()
     Worker(a.name, a.reconciler).run()
 
 

@@ -24,12 +24,14 @@ from pathlib import Path
 
 import redis
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 
 from . import chat, receipts
 from .db import close_job, connect, init_schema
+from .workload import HoldTimeout, workload
 
 SESSION_TTL, CACHE_TTL, RL_WINDOW, RL_LIMIT = 1800, 300, 60, 1000
 GOODS = ["치이카와 봉제 인형", "하치와레 키링", "우사기 머그컵", "치이카와 미니 백팩", "하치와레 노트",
@@ -48,6 +50,7 @@ _ready = threading.Event()
 async def lifespan(_app: FastAPI):
     """SIGTERM: /readyz turns 503 at once, and the server only starts stopping after the drain."""
     await asyncio.to_thread(lambda: init_schema(connect()))
+    workload.start()
     previous = signal.getsignal(signal.SIGTERM)
 
     def on_term(signum, frame):
@@ -65,6 +68,20 @@ api = APIRouter()      # what the screen calls, served at /api
 
 
 @app.middleware("http")
+async def hold_gate(request: Request, call_next):
+    """During a DB cutover the platform holds the work: requests wait here, at most 60 s.
+    /readyz does not wait: a held environment must stay in the load balancer."""
+    if request.url.path == "/readyz":
+        return await call_next(request)
+    try:
+        async with workload.gate():
+            return await call_next(request)
+    except HoldTimeout:
+        return JSONResponse({"detail": "migrating, try again"}, status_code=503,
+                            headers={"Retry-After": "5"})
+
+
+@app.middleware("http")   # added last, so it runs outermost and marks gate answers too
 async def served_by(request: Request, call_next):
     response = await call_next(request)
     response.headers["X-Served-By"] = SERVED_BY
@@ -78,6 +95,9 @@ def readyz(response: Response):
     if _stopping.is_set():
         response.status_code = 503
         return {"ready": False, "reason": "stopping"}
+    if not workload.ready:
+        response.status_code = 503
+        return {"ready": False, "reason": "waiting for the platform"}
     if not _ready.is_set():
         try:
             connect().execute("SELECT 1")

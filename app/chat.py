@@ -17,6 +17,7 @@ from redis.backoff import NoBackoff
 from redis.retry import Retry
 
 from .db import connect
+from .workload import HoldTimeout, workload
 
 router = APIRouter()
 ROOM = "chiikawa-live"
@@ -125,11 +126,14 @@ async def chat(ws: WebSocket):
                         await send({"type": "error", "id": mid, "message": "잠시 쉬었다가 보내 주세요. 분당 60개까지 보낼 수 있어요."})
                         continue
                     try:
-                        message = await asyncio.to_thread(save_message, mid, uid, text.strip())
+                        async with workload.gate():   # the message is a DB write
+                            message = await asyncio.to_thread(save_message, mid, uid, text.strip())
                         # A retry republishes the same persisted ID. Receivers dedupe;
                         # PostgreSQL history does not turn Pub/Sub into a replay log.
                         await client.publish(CHANNEL, json.dumps(message, ensure_ascii=False))
                         await send({"type": "ack", "id": mid})
+                    except HoldTimeout:
+                        await send({"type": "error", "id": mid, "message": "잠시 점검 중이에요. 같은 메시지를 다시 보내 주세요."})
                     except ValueError as exc:
                         await send({"type": "error", "id": mid, "message": str(exc)})
                     except Exception:

@@ -147,14 +147,36 @@ npm install && npm run dev
 | `OBJECT_MIGRATION_SERVER` | 없음 | object-migration 서버 주소. 있으면 영수증 버킷 이전을 따라감 (아래) |
 | `OBJECT_MIGRATION_ID` 또는 `OBJECT_MIGRATION_ID_FILE` | 없음 | 따라갈 이전 ID. 파일은 1초마다 다시 읽음 |
 | `STORAGE_<KIND>_ACCESS_KEY_ID`, `_SECRET_ACCESS_KEY`, `_ENDPOINT` | 없음 | 이전 경로의 버킷 종류(`S3`, `GCS`, `SEAWEEDFS`)별 앱 자격 증명과 주소. GCS는 S3 호환 API와 HMAC 키 |
+| `CONTROL_PLANE_URL` | 없음 | 플랫폼(control-plane) 주소. 있으면 업무 정지 지시를 따름 (아래). 없으면 기존과 같이 동작 |
+| `WORKLOAD_ACTOR` | 없음 | 이 프로세스의 역할. 플랫폼 시드의 `actors` 이름 (`goods-aws-api`, `goods-aws-worker` 등). `CONTROL_PLANE_URL`이 있으면 필수 |
+| `WORKLOAD_TOKEN` | 없음 | 플랫폼의 heartbeat 토큰 |
+| `WORKLOAD_SCOPE` | `scope:goods` | 플랫폼 시드의 `scope` |
 
 ### 영수증 버킷 이전 따라가기
 
 [object-migration](https://github.com/SoftBank-2026-Hackathon-Foxtrot/object-migration)의 앱 저장소 모듈(`docs/app-storage.md`)을 `app/objroute.py`로 구현했습니다. 모든 프로세스(API worker, 큐 worker)가 1초마다 경로를 묻고, 쓰는 버킷과 읽는 순서를 그대로 따릅니다. 서버는 살아 있는 앱이 모두 새 경로를 적용해야 다음 단계로 넘어갑니다. 이전 중 경로를 5초 넘게 갱신하지 못하면 영수증 요청을 실패시킵니다. 이전 ID가 없으면 `S3_BUCKET`, `S3_FALLBACK_BUCKET`을 씁니다. 앱은 영수증을 지우지 않아 삭제 기록은 구현하지 않았습니다.
 
-**전환 전에 앱이 이전 ID를 알고 있어야 합니다.** 서버는 한 번도 묻지 않은 앱을 기다리지 않습니다. 이전을 만든 직후 ID를 `OBJECT_MIGRATION_ID_FILE`에 쓰거나, 그 ID로 앱을 다시 배포합니다.
+**전환 전에 앱이 이전 ID를 알고 있어야 합니다.** 서버는 한 번도 묻지 않은 앱을 기다리지 않습니다. 이전을 만든 직후 ID를 `OBJECT_MIGRATION_ID_FILE`에 쓰거나, 그 ID로 앱을 다시 배포합니다. `CONTROL_PLANE_URL`이 있으면 플랫폼이 heartbeat 응답으로 이전 ID를 알려 주고, 앱이 이 파일에 직접 씁니다.
 
 검증: 실제 object-migration 서버(fake engine)와 s3mock으로 앱 프로세스 2개가 50ms마다 영수증을 쓰고 읽는 중에 freeze → switch → resume → finalize. 쓰기 760건, 읽기 760건 실패 0건. 전환 뒤 원본에 쓴 영수증 0건, 전환 전 대상에 쓴 영수증 0건.
+
+### 플랫폼의 업무 정지 따르기
+
+DB 전환에는 앱과 Worker의 실제 업무 정지가 필요합니다. [control-plane의 앱 연동 문서](https://github.com/SoftBank-2026-Hackathon-Foxtrot/control-plane/blob/main/docs/app-integration.md)대로 `app/workload.py`에 구현했습니다. `CONTROL_PLANE_URL`이 없으면 아무것도 하지 않습니다.
+
+- **heartbeat:** API의 uvicorn worker와 큐 worker가 프로세스마다 따로 플랫폼에 상태를 보고하고 RUN/HOLD 지시를 받습니다. 간격은 응답의 `pollAfterMs`(평소 5초, 정지 중 200ms)를 따릅니다.
+- **API:** HOLD 동안 새 HTTP 요청과 채팅 메시지 저장을 게이트에서 기다리게 합니다. 처리 중인 요청이 0이 되면 HELD를 보고합니다. 60초를 넘으면 `503`과 `Retry-After`를 반환합니다. `/readyz`는 게이트를 거치지 않습니다.
+- **큐 worker:** HOLD 동안 새 배치를 가져가지 않고, 처리 중인 배치를 끝내면 HELD를 보고합니다.
+- **시작과 단절:** 첫 지시를 받기 전까지 `/readyz`가 503이고 업무를 받지 않습니다. 플랫폼과 통신이 끊기면 마지막 지시를 유지합니다. HOLD는 스스로 풀지 않습니다.
+- **오브젝트 이전 ID:** 응답의 `objectMigrationId`를 `OBJECT_MIGRATION_ID_FILE`에 씁니다.
+
+검증(로컬): 실제 control-plane API와 코디네이터를 띄우고, 이 앱(uvicorn worker 4개, 큐 worker 2개)에 부하를 주는 중에 정지를 요청해 5초 유지한 뒤 풀었습니다.
+
+- 6개 프로세스 모두 HELD를 보고했고, 해제 후 0.45초 안에 모두 RUNNING을 보고했습니다.
+- 요청 277건이 모두 200이었습니다. 정지 중에 응답한 요청은 0건이고, 정지에 걸린 8건은 최대 6.47초 기다린 뒤 성공했습니다.
+- 정지 중 DB 쓰기는 0건이었습니다(접수된 참여 요청 0건, 처리된 주문 0건).
+- 오브젝트 이전 ID가 세 컨테이너 모두의 파일에 기록됐습니다.
+- 확인하지 않은 것: 60초 초과 시 503, 정지 중 플랫폼 단절 시 HOLD 유지.
 
 ## 초안이라 없는 것
 
