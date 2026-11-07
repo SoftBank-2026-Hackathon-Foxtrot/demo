@@ -25,12 +25,12 @@ import asyncio
 import json
 import logging
 import os
-import socket
 import threading
 import time
 import urllib.request
 from contextlib import asynccontextmanager, contextmanager
 
+from .instance import instance_id
 from .telemetry import get_telemetry
 from .redisroute import router as redis_router
 
@@ -218,13 +218,6 @@ class Workload:
         os.replace(partial, self.id_file)
         self.migration_id = migration_id
         log.info("following object migration %s", migration_id)
-
-
-def instance_id() -> str:
-    """One process among the actor's: host, container (WORKLOAD_INSTANCE) and PID. Two worker
-    containers on the same host network both run as PID 1, so the PID alone repeats."""
-    parts = [socket.gethostname(), os.environ.get("WORKLOAD_INSTANCE", ""), str(os.getpid())]
-    return "-".join(part for part in parts if part)
 
 
 workload = Workload()
