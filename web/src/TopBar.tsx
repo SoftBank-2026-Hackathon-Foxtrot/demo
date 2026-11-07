@@ -1,19 +1,5 @@
-import { CaretLeft, CaretRight, MagnifyingGlass, PawPrint, ShoppingCart, SignIn, SignOut, WarningCircle } from "@phosphor-icons/react";
-import { useState, type ReactNode } from "react";
-
-const NOTICES = ["작고 귀여운 마음이 모이는 곳, 치이카와 LIVE", "오늘의 친구들을 라이브 공구방에서 만나보세요", "한 번에 5개까지, 좋아하는 친구와 함께해요"];
-
-export function Announcement() {
-  const [i, setI] = useState(0);
-  const move = (d: number) => setI((i + d + NOTICES.length) % NOTICES.length);
-  return (
-    <div className="flex h-9 items-center justify-between bg-bar px-2 text-sm font-medium text-ink md:px-[16%]">
-      <button aria-label="이전 안내" onClick={() => move(-1)} className="grid size-9 place-items-center rounded-full"><CaretLeft size={16} /></button>
-      <p aria-live="polite" className="truncate">{NOTICES[i]}</p>
-      <button aria-label="다음 안내" onClick={() => move(1)} className="grid size-9 place-items-center rounded-full"><CaretRight size={16} /></button>
-    </div>
-  );
-}
+import { MagnifyingGlass, PawPrint, ShoppingCart, SignIn, SignOut, WarningCircle } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 
 export function Brand({ className = "" }: { className?: string }) {
   return (

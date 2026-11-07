@@ -5,7 +5,7 @@ import { JoinSheet } from "./JoinSheet";
 import { Login } from "./Login";
 import { Orders } from "./Orders";
 import { LiveRoom } from "./LiveRoom";
-import { Announcement, Connection, Header, NavBar, type View } from "./TopBar";
+import { Connection, Header, NavBar, type View } from "./TopBar";
 
 export function App() {
   const [sid, setSid] = useState<string | null>(savedSession);
@@ -87,7 +87,6 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
 
   return (
     <div className="min-h-[100dvh]">
-      <Announcement />
       <Header name={name} count={orders?.length ?? 0} onCart={() => setView("orders")} onLogout={onLogout} />
       <NavBar view={view} query={query} onView={setView} onQuery={(v) => { setQuery(v); if (view === "orders") setView("all"); }} />
       {offline && <Connection />}
@@ -100,7 +99,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
         ) : view === "closing" || searching || view === "all" ? (
           <GoodsGrid goods={shown} title={view === "closing" ? "마감 임박" : searching ? "검색 결과" : "전체 상품"} onPick={setPicked} />
         ) : (
-          <div className="more-goods"><div className="section-kicker">THE LITTLE COLLECTION</div><GoodsGrid goods={goods} title="다음으로 만나볼 친구들" onPick={setPicked} /></div>
+          <div className="more-goods"><GoodsGrid goods={goods} title="상품 목록" onPick={setPicked} /></div>
         )}
       </main>
       <JoinSheet
@@ -115,7 +114,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
           void refreshGoods();
         }}
       />
-      <footer className="shop-footer"><strong>치이카와 LIVE</strong><span>작고 귀여운 것들을 좋아하는 우리들의 공구방</span><small>해커톤 시연용 · 비공식 데모 · 실제 결제 및 배송 없음</small></footer>
+      <footer className="shop-footer"><small>해커톤 시연용 · 비공식 데모 · 실제 결제 및 배송 없음</small></footer>
     </div>
   );
 }

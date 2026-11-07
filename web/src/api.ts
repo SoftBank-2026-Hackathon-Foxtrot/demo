@@ -46,10 +46,11 @@ function saveSession(sid: string | null) {
   }
 }
 
-async function call<T>(path: string, sid: string | null, method = "GET", extra: Record<string, string> = {}): Promise<T> {
+async function call<T>(path: string, sid: string | null, method = "GET", extra: Record<string, string> = {}, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { ...extra };
   if (sid) headers["x-session"] = sid;
-  const r = await fetch(`/api${path}`, { method, headers });
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const r = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   if (r.status === 401) throw new SessionLost();
   if (!r.ok) throw new Error(`${r.status}`);
   return r.json() as Promise<T>;
@@ -75,6 +76,15 @@ export const listGroupBuys = (sid: string) => call<GroupBuy[]>("/groupbuys", sid
 export const listOrders = (sid: string) => call<Order[]>("/me/requests", sid);
 export const getReceipt = (sid: string, id: string) => call<Receipt>(`/me/receipts/${id}`, sid);
 export const getGroupBuy = (sid: string, id: number) => call<{ price: number }>(`/groupbuys/${id}`, sid);
+export type BaselineIds = Record<"chat" | "orders" | "requests" | "goods", string[]>;
+export type Baseline = { at: number; ids: BaselineIds; limit_per_table: number; served_by: string };
+export type LiveMetrics = {
+  at: number; served_by: string; chat_ids: string[]; chat_sample_limit: number; delivery_grace_ms: number;
+  retention: Record<keyof BaselineIds, { retained: number; expected: number }> | null;
+};
+export const saveBaseline = (sid: string) => call<Baseline>("/live/baseline", sid);
+export const readLiveMetrics = (sid: string, since: number, baseline: BaselineIds | null) =>
+  call<LiveMetrics>("/live/metrics", sid, "POST", {}, { since_ms: since, baseline });
 /** The same key on every retry of one order, so a lost response cannot order twice. */
 export function newOrderKey(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");

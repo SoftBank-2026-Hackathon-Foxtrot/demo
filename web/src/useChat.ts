@@ -7,8 +7,11 @@ export function useChat(sid: string, onSessionLost: () => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<Connection>("connecting");
   const [error, setError] = useState("");
+  const [bot, setBot] = useState({ rate: 0, error: "" });
   const [pending, setPending] = useState<{ id: string; text: string } | null>(null);
-  const [info, setInfo] = useState({ server: "", connection: "", reconnects: 0, received: 0 });
+  const [info, setInfo] = useState({ server: "", environment: "", connection: "", reconnects: 0, received: 0 });
+  const [measuredSince, setMeasuredSince] = useState<number | null>(null);
+  const liveIds = useRef(new Set<string>());
   const socket = useRef<WebSocket | null>(null);
   const ackTimer = useRef<ReturnType<typeof setTimeout>>();
   const lost = useRef(onSessionLost);
@@ -39,12 +42,16 @@ export function useChat(sid: string, onSessionLost: () => void) {
         lastEvent = Date.now();
         const data = JSON.parse(event.data);
         if (data.type === "history") merge(data.messages);
+        if (data.type === "bot_state") setBot({ rate: data.rate, error: data.error || "" });
         if (data.type === "ready") {
           attempt = 0;
           setStatus("connected");
-          setInfo((i) => ({ ...i, server: `${data.served_by} · ${data.pid}`, connection: data.connection_id }));
+          setMeasuredSince((since) => since ?? data.measurement_since_ms ?? null);
+          setInfo((i) => ({ ...i, server: `${data.served_by} · ${data.pid}`, environment: data.served_by, connection: data.connection_id }));
         }
         if (data.type === "message") {
+          liveIds.current.add(data.message.id);
+          if (liveIds.current.size > 20000) liveIds.current.delete(liveIds.current.values().next().value!);
           merge([data.message]);
           if (!seen.has(data.message.id)) {
             seen.add(data.message.id);
@@ -64,6 +71,7 @@ export function useChat(sid: string, onSessionLost: () => void) {
       };
       ws.onclose = (event) => {
         if (stopped) return;
+        setBot({ rate: 0, error: "" });
         if (event.code === 4401) { lost.current(); return; }
         setStatus("reconnecting");
         setInfo((i) => ({ ...i, reconnects: i.reconnects + 1 }));
@@ -100,5 +108,9 @@ export function useChat(sid: string, onSessionLost: () => void) {
     setPending(null);
     setError("");
   }
-  return { messages, status, error, pending, info, send, editPending };
+  function setBotRate(rate: number) {
+    if (socket.current?.readyState !== WebSocket.OPEN || status !== "connected") return;
+    socket.current.send(JSON.stringify({ type: "bot", rate }));
+  }
+  return { messages, status, error, pending, info, send, editPending, bot, setBotRate, measuredSince, liveIds };
 }

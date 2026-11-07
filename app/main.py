@@ -29,7 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 
-from . import chat, receipts
+from . import chat, metrics, receipts
 from .db import close_job, connect, init_schema
 from .workload import HoldTimeout, workload
 
@@ -148,6 +148,18 @@ def logout(x_session: str | None = Header(None)):
 @api.get("/me")
 def me(x_session: str | None = Header(None)):
     return {"uid": user_of(x_session)}
+
+
+@api.get("/live/baseline")
+def live_baseline(x_session: str | None = Header(None)):
+    user_of(x_session)
+    return metrics.snapshot() | {"served_by": SERVED_BY}
+
+
+@api.post("/live/metrics")
+def live_metrics(measurement: metrics.Measurement, x_session: str | None = Header(None)):
+    user_of(x_session)
+    return metrics.inspect(measurement) | {"served_by": SERVED_BY}
 
 
 @api.get("/me/requests")

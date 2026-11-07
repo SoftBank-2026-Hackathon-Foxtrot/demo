@@ -22,6 +22,15 @@ from .workload import HoldTimeout, workload
 router = APIRouter()
 ROOM = "chiikawa-live"
 CHANNEL = "live:chiikawa-live"
+BOT_MAX_RATE = 1000
+BOT_LINES = ("치이카와 너무 귀여워요 ♡", "하치와레 키링 같이 모아요!", "우사기도 데려가고 싶어요!", "오늘 공구도 응원해요 ✦")
+
+
+async def publish_message(client, mid, uid, text):
+    # Bots use the same persistence, cutover gate and Redis delivery as people.
+    async with workload.gate():
+        message = await asyncio.to_thread(save_message, mid, uid, text)
+    await client.publish(CHANNEL, json.dumps(message, ensure_ascii=False))
 
 
 def history():
@@ -60,6 +69,8 @@ async def chat(ws: WebSocket):
                                   socket_connect_timeout=5, retry=Retry(NoBackoff(), 0))
     tasks = []
     write_lock = asyncio.Lock()
+    bot_rate = 0
+    bot_changed = asyncio.Event()
 
     async def send(data):
         async with write_lock:
@@ -90,7 +101,36 @@ async def chat(ws: WebSocket):
                         break
             await send({"type": "history", "messages": await asyncio.to_thread(history)})
             await send({"type": "ready", "connection_id": uuid.uuid4().hex,
-                        "served_by": os.environ.get("SERVED_BY", "local"), "pid": os.getpid()})
+                        "served_by": os.environ.get("SERVED_BY", "local"), "pid": os.getpid(),
+                        "measurement_since_ms": int(time.time() * 1000)})
+            await send({"type": "bot_state", "rate": 0})
+
+            async def bot():
+                nonlocal bot_rate
+                sequence = 0
+                while True:
+                    bot_changed.clear()
+                    if not bot_rate:
+                        await bot_changed.wait()
+                        continue
+                    started = asyncio.get_running_loop().time()
+                    try:
+                        if await client.get(f"session:{sid}") != uid:
+                            await ws.close(code=4401)
+                            return
+                        sequence += 1
+                        await publish_message(client, str(uuid.uuid4()), f"공구봇 {(sequence - 1) % 8 + 1}",
+                                              f"{BOT_LINES[(sequence - 1) % len(BOT_LINES)]} · {sequence}")
+                    except Exception:
+                        bot_rate = 0
+                        await send({"type": "bot_state", "rate": 0,
+                                    "error": "봇 메시지를 전달하지 못해 멈췄어요. 다시 시작해 주세요."})
+                        continue
+                    # No catch-up burst after a slow DB write or a cutover hold.
+                    if bot_rate:
+                        delay = max(0, 1 / bot_rate - (asyncio.get_running_loop().time() - started))
+                        with suppress(TimeoutError):
+                            await asyncio.wait_for(bot_changed.wait(), delay)
 
             async def relay():
                 while True:
@@ -99,11 +139,25 @@ async def chat(ws: WebSocket):
                         await send({"type": "message", "message": json.loads(event["data"])})
 
             async def receive():
+                nonlocal bot_rate
                 while True:
                     try:
                         data = await ws.receive_json()
                     except json.JSONDecodeError:
                         await send({"type": "error", "message": "메시지 형식을 확인해 주세요."})
+                        continue
+                    if isinstance(data, dict) and data.get("type") == "bot":
+                        if await client.get(f"session:{sid}") != uid:
+                            await ws.close(code=4401)
+                            return
+                        rate = data.get("rate")
+                        if type(rate) is not int or not 0 <= rate <= BOT_MAX_RATE:
+                            await send({"type": "bot_state", "rate": bot_rate,
+                                        "error": f"봇 트래픽은 초당 1~{BOT_MAX_RATE}개로 입력해 주세요."})
+                            continue
+                        bot_rate = rate
+                        bot_changed.set()
+                        await send({"type": "bot_state", "rate": bot_rate})
                         continue
                     mid = data.get("id") if isinstance(data, dict) else None
                     text = data.get("text") if isinstance(data, dict) else None
@@ -126,11 +180,9 @@ async def chat(ws: WebSocket):
                         await send({"type": "error", "id": mid, "message": "잠시 쉬었다가 보내 주세요. 분당 60개까지 보낼 수 있어요."})
                         continue
                     try:
-                        async with workload.gate():   # the message is a DB write
-                            message = await asyncio.to_thread(save_message, mid, uid, text.strip())
                         # A retry republishes the same persisted ID. Receivers dedupe;
                         # PostgreSQL history does not turn Pub/Sub into a replay log.
-                        await client.publish(CHANNEL, json.dumps(message, ensure_ascii=False))
+                        await publish_message(client, mid, uid, text.strip())
                         await send({"type": "ack", "id": mid})
                     except HoldTimeout:
                         await send({"type": "error", "id": mid, "message": "잠시 점검 중이에요. 같은 메시지를 다시 보내 주세요."})
@@ -148,7 +200,7 @@ async def chat(ws: WebSocket):
                     await client.expire(f"session:{sid}", 1800)
                     await send({"type": "heartbeat"})
 
-            tasks = [asyncio.create_task(fn()) for fn in (relay, receive, heartbeat)]
+            tasks = [asyncio.create_task(fn()) for fn in (relay, receive, heartbeat, bot)]
             try:
                 done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
                 for task in done:
