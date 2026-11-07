@@ -294,3 +294,99 @@ header button { width: 46px !important; height: 46px !important; background: tra
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 @media (prefers-reduced-motion: reduce) { .dancer > span, .dancer::before, .dance-notes > span { animation: none !important; will-change: auto; }.dance-notes { display: none; } }
+
+/* Compact live view: keep the broadcast and conversation in the same viewport. */
+header > .shop-topbar { display:flex; align-items:center; gap:12px; padding:6px 14px; min-height:54px; margin:auto; }
+.shop-topbar .font-display > span:last-child { font-size:25px; }
+.shop-topbar .font-display > span:first-child { width:34px; height:34px; }
+.shop-topbar .font-display > span:first-child svg { width:23px; }
+.shop-topbar .shop-greeting { margin-left:auto; font-size:11px !important; }
+.shop-topbar > div:last-child { margin-left:auto; gap:2px; }
+nav > .shop-navigation { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:0 14px; margin:auto; }
+.shop-navigation ul { flex-shrink:0; }
+nav .shop-navigation ul button { padding:7px 12px !important; font-size:12px !important; min-height:38px; }
+nav .shop-navigation ul button[aria-current]::after { bottom:0; left:12px; right:12px; }
+.shop-search { display:flex; align-items:center; border-bottom:1px solid #d4c6bc; width:180px; margin:0 0 0 auto; }
+.mobile-search-toggle { display:none; }
+.live-section { padding:8px 12px 0; }
+.broadcast-layout { display:block; }
+.broadcast-stage { aspect-ratio:auto; height:clamp(360px,64dvh,680px); }
+.broadcast-main > .featured-buy { margin-top:6px; padding:8px 12px; gap:8px; border-radius:10px; }
+.featured-buy .featured-tile { width:38px; height:38px; }
+.featured-copy > span { font-size:9px; }
+.featured-copy h2 { font-size:13px; }
+.featured-copy p { font-size:13px; }
+.featured-copy small { font-size:10px; }
+.featured-buy .buy-button { padding:10px 12px; }
+.migration-status.compact-monitor { display:flex; gap:8px; align-items:flex-start; padding:7px 9px; margin-bottom:7px; border-radius:8px; }
+.monitor-details { flex:1; min-width:0; }
+.monitor-details > summary { display:flex; flex-wrap:wrap; align-items:center; gap:5px 12px; font-size:11px; cursor:pointer; list-style:none; min-height:28px; }
+.monitor-details > summary::-webkit-details-marker { display:none; }
+.monitor-label { font-weight:700; color:#435e4f; }
+.monitor-label::after { content:'⌄'; padding-left:6px; }
+.monitor-details[open] .monitor-label::after { content:'⌃'; }
+.monitor-details > summary strong { color:#435e4f; font-variant-numeric:tabular-nums; }
+.monitor-where { color:#667565; font-size:10px; }
+.monitor-baseline { flex-shrink:0; padding:5px 8px; border:1px solid #b2c3ac; border-radius:5px; font-size:10px; color:#435e4f; background:#fffefa; min-height:30px; }
+.monitor-baseline:disabled { opacity:.5; }
+.monitor-expanded { padding-top:10px; border-top:1px solid #dee5d8; margin-top:5px; }
+.monitor-expanded .migration-measures { margin:10px 0; }
+.monitor-expanded .migration-status-footer { align-items:flex-start; flex-direction:row; }
+.monitor-expanded .migration-status-footer button { display:none; }
+.floating-chat { position:absolute; z-index:2; left:14px; right:70px; top:54px; bottom:82px; display:flex; flex-direction:column; justify-content:flex-end; align-items:flex-start; gap:6px; pointer-events:none; mask-image:linear-gradient(to bottom,transparent,#000 16%); }
+.floating-chat-entry { max-width:100%; flex-shrink:0; }
+.floating-chat-bubble { width:fit-content; max-width:100%; display:flex; align-items:baseline; gap:7px; padding:7px 10px; border:1px solid #ffffff1a; border-radius:11px; background:#302326a6; color:#fff; box-shadow:0 1px 4px #0000000d; font-size:12px; line-height:1.4; transition:opacity .5s linear,filter .5s linear,transform .5s linear; }
+.floating-chat-bubble strong { color:#ffe0ab; font-size:10px; flex-shrink:0; max-width:85px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.floating-chat-bubble span { overflow-wrap:anywhere; word-break:break-word; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; }
+.stage-composer { position:absolute; bottom:12px; left:12px; right:12px; z-index:3; }
+.stage-composer .composer-input { display:flex; align-items:center; padding:5px 6px 5px 13px; gap:8px; border:1px solid #ffffff65; background:#fffdf8ed; border-radius:24px; box-shadow:0 2px 12px #58333910; }
+.stage-composer textarea { width:100%; min-width:0; min-height:28px; max-height:72px; resize:none; background:transparent; outline:none; color:#453b36; font-size:13px; line-height:28px; }
+.stage-composer button { flex-shrink:0; display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:var(--accent); color:white; }
+.stage-composer button:disabled { opacity:.4; }
+.stage-chat-feedback { padding:5px 10px; margin-top:5px; border-radius:8px; color:#fff; background:#302326dc; font-size:11px; }
+.stage-chat-feedback button { display:inline; width:auto; height:auto; padding:3px 6px; margin-left:5px; border-radius:4px; font-size:11px; }
+.broadcast-stage .stage-heart { z-index:3; bottom:72px; right:14px; }
+.live-tools { margin-top:6px; border-bottom:1px solid #eadfd3; font-size:11px; }
+.live-tools > summary { display:flex; align-items:center; gap:6px; cursor:pointer; padding:7px 2px; color:#79665c; }
+.live-tools > summary > span:last-child { margin-left:auto; }
+.live-tools .online-label { color:#496f56; }
+.live-traffic-controls.chat-bot-controls { margin:0 0 6px; padding:5px 8px; border:1px solid #eadfd3; border-radius:8px; background:#fff9ef; }
+.live-traffic-controls .chat-bot-row { display:flex; align-items:center; gap:7px; flex-wrap:wrap; }
+.live-traffic-controls .chat-bot-toggle { min-height:30px; padding:5px 8px; font-size:11px; }
+.live-traffic-controls input { width:58px; padding:4px 6px; font-size:12px; }
+.live-traffic-controls label,.live-traffic-controls .chat-bot-row > span { font-size:10px; }
+.live-traffic-controls > p:not(.sr-only) { margin-top:4px; font-size:10px; }
+.chat-history { max-height:260px; overflow-y:auto; padding:10px; background:#fff8ee; border-radius:8px; }
+.chat-history > div { display:flex; gap:10px; padding:5px 0; overflow-wrap:anywhere; }
+.chat-history strong { flex-shrink:0; color:#9b5b53; }
+.live-footnote { margin-top:6px; }
+.more-goods { margin-top:16px; padding-top:16px; }
+@media(max-width:800px) {
+  header > .shop-topbar { padding:4px 10px !important; min-height:50px; gap:6px; }
+  .shop-topbar .shop-greeting { display:none; }
+  .shop-topbar .font-display > span:last-child { font-size:23px; }
+  nav > .shop-navigation { padding:0 10px; justify-content:space-between !important; gap:0 !important; }
+  nav .shop-navigation ul button { font-size:11px !important; padding:6px 9px !important; }
+  .mobile-search-toggle { display:grid; place-items:center; width:34px; height:36px; }
+  nav .shop-search { display:none; margin:0 0 5px; width:100%; max-width:none; }
+  nav .shop-search.is-open { display:flex; }
+  .live-section { padding:6px 8px 0; }
+  .broadcast-stage { height:clamp(350px,61dvh,560px); border-radius:10px; }
+  .dancing-friends { left:0; right:0; bottom:24%; }
+  .stage-top { top:10px; left:10px; right:10px; }
+  .dance-toggle { top:10px; right:10px; }
+  .floating-chat { left:10px; right:58px; top:48px; bottom:75px; gap:5px; }
+  .floating-chat-bubble { font-size:11px; padding:6px 9px; }
+  .floating-chat-bubble strong { font-size:10px; max-width:65px; }
+  .stage-composer { left:9px; right:9px; bottom:9px; }
+  .stage-composer textarea { font-size:16px; }
+  .broadcast-stage .stage-heart { bottom:67px; right:10px; }
+  .monitor-details > summary { font-size:10px; gap:4px 8px; }
+  .monitor-where { flex-basis:100%; font-size:9px; }
+  .migration-status.compact-monitor { padding:5px 7px; margin-bottom:6px; }
+  .featured-buy .featured-copy small { display:none; }
+  .featured-buy .featured-tile { width:30px; height:34px; }
+  .featured-buy .buy-button { font-size:11px; padding:9px; }
+  .featured-buy .featured-copy h2 { font-size:12px; }
+}
+@media(prefers-reduced-motion:reduce) { .floating-chat-bubble { transition:none; filter:none !important; transform:none !important; } }

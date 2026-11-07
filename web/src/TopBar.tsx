@@ -1,5 +1,5 @@
 import { MagnifyingGlass, PawPrint, ShoppingCart, SignIn, SignOut, WarningCircle } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 export function Brand({ className = "" }: { className?: string }) {
   return (
@@ -27,11 +27,9 @@ type View = "live" | "all" | "closing" | "orders";
 export function Header({ name, count, onCart, onLogout }: { name: string | null; count: number; onCart?: () => void; onLogout?: () => void }) {
   return (
     <header className="stripes">
-      <div className="mx-auto grid max-w-[1320px] grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 px-4 py-3 md:min-h-25 md:grid-cols-[1fr_auto_1fr]">
-        <p className="col-span-2 row-start-2 w-fit justify-self-center rounded-full border border-ink bg-surface px-8 py-1 text-sm md:col-span-1 md:row-start-1 md:justify-self-end md:mr-10">
-          안녕하세요! {name ? `${name}님` : "게스트님"}
-        </p>
+      <div className="shop-topbar">
         <Brand />
+        <p className="shop-greeting">{name ? `${name}님` : "게스트님"}</p>
         {onCart && onLogout ? (
           <div className="flex justify-end gap-2">
             <Circle label="내 주문" tint="bg-mint" badge={count} onClick={onCart}><ShoppingCart size={22} weight="duotone" /></Circle>
@@ -46,10 +44,11 @@ export function Header({ name, count, onCart, onLogout }: { name: string | null;
 }
 
 export function NavBar({ view, query, onView, onQuery }: { view: View; query: string; onView: (v: View) => void; onQuery: (q: string) => void }) {
+  const [searchOpen, setSearchOpen] = useState(false);
   const items: [View, string][] = [["live", "라이브 공구방"], ["all", "전체 상품"], ["closing", "마감 임박"], ["orders", "내 주문"]];
   return (
     <nav className="bg-nav">
-      <div className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-center gap-x-8 gap-y-1 px-4 py-2 md:min-h-11">
+      <div className="shop-navigation">
         <ul className="flex items-center">
           {items.map(([v, label], i) => (
             <li key={v} className={i ? "border-l border-ink" : ""}>
@@ -59,9 +58,10 @@ export function NavBar({ view, query, onView, onQuery }: { view: View; query: st
             </li>
           ))}
         </ul>
-        <label className="flex w-full max-w-50 items-center border-b border-ink">
+        <button className="mobile-search-toggle" aria-label="상품 검색 열기" aria-expanded={searchOpen} onClick={() => {setSearchOpen(!searchOpen); if(searchOpen) onQuery("");}}><MagnifyingGlass size={19}/></button>
+        <label className={`shop-search ${searchOpen ? "is-open" : ""}`}>
           <span className="sr-only">상품 찾기</span>
-          <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="상품 찾기" className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted" />
+          <input value={query} onChange={(e) => onQuery(e.target.value)} onKeyDown={e=>{if(e.key==="Escape"){setSearchOpen(false);onQuery("");}}} placeholder="상품 찾기" className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted" />
           <MagnifyingGlass size={18} />
         </label>
       </div>
