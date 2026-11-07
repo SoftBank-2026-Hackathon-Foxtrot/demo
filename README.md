@@ -223,3 +223,9 @@ DB 전환에는 앱과 Worker의 실제 업무 정지가 필요합니다. [contr
 ## 마이그레이션 관측
 
 추가 필드와 연결 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.
+
+앱 시스템 지표는 새 이미지의 `app/system_metrics.py`가 발행합니다. `OTEL_SYSTEM_METRICS=container`, `OTEL_APPLICATION_ID`, `OTEL_OWNER_ID`, `OTEL_DEPLOYMENT_ID`, `SERVED_BY`와 OTLP endpoint/headers가 필요합니다. 소유자와 배포 ID는 플랫폼 배포 기록에서 주입하며 앱 이름만으로 합산하지 않습니다. API worker 여러 개 중 한 프로세스만 10초마다 발행하고 종료 시 다른 프로세스가 이어받습니다.
+
+CPU 사용 시간·메모리·디스크 I/O는 현재 프로세스가 속한 컨테이너 cgroup을 읽습니다. CPU·메모리 제한이 없으면 사용량만 제공하고 비율은 비웁니다. 호스트 CPU/메모리 및 공유 디스크 용량은 수집하지 않습니다. Docker/온프렘의 네트워크는 분리된 컨테이너 namespace 기준입니다. Fargate/Cloud Run은 같은 앱 실행 묶음의 API·워커·터널이 네트워크를 공유하므로 `OTEL_NETWORK_SCOPE=app-instance`로 표시하고 API만 발행합니다. 지원하지 않는 커널 지표는 0 대신 누락으로 처리합니다.
+
+기존 `compose.observability.yml` 호스트 에이전트는 제거했습니다. 이미 실행한 에이전트는 중단해야 합니다. 기존 호스트 지표는 새 조회 조건에 포함되지 않습니다. 로컬 예시는 `docker compose --env-file .env.otel up --build`이며 `.env.otel.example`을 참고합니다. 원격 배포는 새 이미지와 프로비저너 설정을 함께 적용해야 합니다.

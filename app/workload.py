@@ -135,6 +135,8 @@ class Workload:
 
     # ---- the report -------------------------------------------------------------------------
     def start(self) -> None:
+        from .system_metrics import runtime_metrics
+        runtime_metrics.start()
         if get_telemetry("app").enabled and not self.observation_thread:
             self.observation_thread = threading.Thread(target=self._observe, name="otel-workload", daemon=True)
             self.observation_thread.start()
@@ -158,6 +160,8 @@ class Workload:
             self.observation_stop.wait(5)
 
     def stop_observations(self):
+        from .system_metrics import runtime_metrics
+        runtime_metrics.stop()
         self.observation_stop.set()
         if self.observation_thread:
             self.observation_thread.join(timeout=2)
