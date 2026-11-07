@@ -1,4 +1,4 @@
-"""Queue worker for the group-buy app. Talks to Redis only through the central proxy.
+"""Queue worker for the group-buy app. Talks to Redis on the route the platform orders.
 
   q:join     confirm or sell out, inside one DB transaction guarded by status=QUEUED,
              so a message delivered twice changes stock once. A confirmed order then gets its receipt
@@ -16,16 +16,17 @@
 import argparse
 import json
 import logging
-import os
 import time
 
 import psycopg
 import redis
 from redis.backoff import NoBackoff
+from redis.commands.core import Script
 from redis.retry import Retry
 
 from . import receipts
 from .db import bump, close_job, connect
+from .redisroute import router as redis_router
 from .workload import workload
 
 log = logging.getLogger("worker")
@@ -50,9 +51,11 @@ def now_ms() -> int:
 class Worker:
     def __init__(self, name: str, reconciler: bool):
         self.name, self.reconciler = name, reconciler
-        self.r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"), decode_responses=True,
-                                      retry=Retry(NoBackoff(), 0), socket_timeout=10)
-        self.move_due = self.r.register_script(MOVE_DUE)
+        # Follows the Redis route the platform orders (redisroute.py). A consumer keeps its name on
+        # the new route, so what it had not acked is still pending there in the same Redis.
+        self.r = redis_router.client(decode_responses=True, retry=Retry(NoBackoff(), 0), socket_timeout=10)
+        # Bound to the routed client, not to the pool of the moment: it runs on the current route.
+        self.move_due = Script(self.r, MOVE_DUE)
 
     @property
     def db(self) -> psycopg.Connection:

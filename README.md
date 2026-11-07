@@ -155,7 +155,9 @@ npm install && npm run dev
 
 | 이름 | 기본값 | 설명 |
 |---|---|---|
-| `REDIS_URL` | `redis://localhost:6379` | Redis 또는 Redis 프록시 주소 |
+| `REDIS_URL` | `redis://localhost:6379` | Redis 또는 Redis 프록시 주소. `REDIS_DIRECT_URLS`가 있으면 평소의 직접 연결 주소 |
+| `REDIS_PROXY_URL` | 없음 | Redis 프록시 주소와 이 프로세스의 프록시 계정. `REDIS_DIRECT_URLS`가 있으면 필수 |
+| `REDIS_DIRECT_URLS` | 없음 | 환경별 직접 연결 주소 `aws=redis://...,gcp=redis://...`. 있으면 플랫폼의 Redis 경로 지시를 따름 (아래) |
 | `DATABASE_URL` | `postgresql://app:apppw@db-proxy.internal:6432/appdb` | PgBouncer 주소 |
 | `S3_ENDPOINT` | 없음 | S3 호환 스토리지 주소. 없으면 AWS S3 |
 | `S3_REGION` | `us-east-1` | S3 리전 |
@@ -195,6 +197,18 @@ DB 전환에는 앱과 Worker의 실제 업무 정지가 필요합니다. [contr
 - 정지 중 DB 쓰기는 0건이었습니다(접수된 참여 요청 0건, 처리된 주문 0건).
 - 오브젝트 이전 ID가 세 컨테이너 모두의 파일에 기록됐습니다.
 - 확인하지 않은 것: 60초 초과 시 503, 정지 중 플랫폼 단절 시 HOLD 유지.
+
+### Redis 경로 따르기
+
+평소에는 Redis에 직접 붙고, 이전하는 동안만 Redis 프록시를 거칩니다(Redis 설계 3-8, control-plane `docs/app-integration.md`의 "Redis 경로"). `app/redisroute.py`에 구현했고, `REDIS_DIRECT_URLS`가 없으면 `REDIS_URL`만 씁니다.
+
+- **경로 지시:** heartbeat 응답의 `redisRoute`, `redisEndpoint`, `redisRouteGeneration`을 따릅니다. 첫 지시를 적용한 뒤에 업무를 받으므로, 이전 중에 뜬 프로세스도 처음부터 프록시로 붙습니다.
+- **명령:** API와 큐 worker의 Redis 클라이언트가 경로를 따라갑니다. 새 명령은 새 연결 풀로 가고, 옛 풀은 쓰는 중인 연결이 없어지면 닫습니다. 파이프라인과 Lua 스크립트도 현재 경로에서 실행합니다.
+- **채팅:** 세션마다 새 경로에 먼저 구독하고 확인을 받은 뒤 옛 구독을 해제합니다. 해제 응답 전에 온 메시지까지 전달하고, 두 경로에서 모두 받은 메시지는 ID로 버립니다. WebSocket은 끊지 않습니다.
+- **큐 worker:** 같은 consumer 이름으로 새 경로에서 읽습니다. ACK하지 않은 메시지는 같은 Redis의 pending 목록에 남아 있습니다.
+- **보고:** heartbeat에 지금 쓰는 경로, 따른 지시 번호, 떠난 경로에 남은 연결 수(`staleConnections`)를 넣습니다. 직접 연결에는 `direct:<WORKLOAD_ACTOR>` 이름을 붙입니다.
+
+검증: `python scripts/check_redis_route.py`가 Valkey 컨테이너 하나에 두 계정으로 두 경로를 흉내 내어 연결 이름, 전환 즉시 새 경로 사용, 옛 풀의 진행 중 명령과 stale 보고, 스크립트와 파이프라인을 확인합니다(11/11). 채팅 구독 이동은 실제 프록시와 함께 시험하지 않았습니다.
 
 ## 초안이라 없는 것
 
