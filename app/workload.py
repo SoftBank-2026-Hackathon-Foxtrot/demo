@@ -14,6 +14,8 @@ Off unless CONTROL_PLANE_URL is set, so the app runs on its own as before.
   WORKLOAD_TOKEN           the platform's workload token
   WORKLOAD_ACTOR           this process's role in the seed: goods-aws-api, goods-aws-worker, ...
   WORKLOAD_SCOPE           scope:goods
+  WORKLOAD_INSTANCE        this container's name, so containers on one host network (each its own
+                           PID 1) report as different processes: <host>-<name>-<pid>
   OBJECT_MIGRATION_ID_FILE where the receipt bucket's migration ID is written for objroute
 
 The same answer also says which Redis route to use (redisroute.py), and every report says which
@@ -161,7 +163,7 @@ class Workload:
             self.observation_thread.join(timeout=2)
 
     def _run(self) -> None:
-        instance = f"{socket.gethostname()}-{os.getpid()}"
+        instance = instance_id()
         url = f"{URL}/internal/v1/workloads/{self.scope}/heartbeat"
         failing = False
         while True:
@@ -216,6 +218,13 @@ class Workload:
         os.replace(partial, self.id_file)
         self.migration_id = migration_id
         log.info("following object migration %s", migration_id)
+
+
+def instance_id() -> str:
+    """One process among the actor's: host, container (WORKLOAD_INSTANCE) and PID. Two worker
+    containers on the same host network both run as PID 1, so the PID alone repeats."""
+    parts = [socket.gethostname(), os.environ.get("WORKLOAD_INSTANCE", ""), str(os.getpid())]
+    return "-".join(part for part in parts if part)
 
 
 workload = Workload()
