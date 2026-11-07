@@ -22,7 +22,6 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import redis
 from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +30,7 @@ from redis.retry import Retry
 
 from . import chat, metrics, receipts
 from .db import close_job, connect, init_schema
+from .redisroute import router as redis_router
 from .workload import HoldTimeout, workload
 
 SESSION_TTL, CACHE_TTL, RL_WINDOW, RL_LIMIT = 1800, 300, 60, 1000
@@ -38,8 +38,9 @@ GOODS = ["치이카와 봉제 인형", "하치와레 키링", "우사기 머그�
          "우사기 스티커 세트", "치이카와 선물 상자", "모몬가 쿠키 틴", "쿠리만주 배지", "라코 티셔츠"]
 
 # No client-side retries: any error the proxy lets through must show up in the load test.
-r = redis.Redis.from_url(os.environ.get("REDIS_URL", "redis://localhost:6379"), decode_responses=True,
-                         retry=Retry(NoBackoff(), 0), max_connections=200, socket_timeout=10)
+# The pool follows the Redis route the platform orders (redisroute.py); REDIS_URL alone when off.
+r = redis_router.client(decode_responses=True, retry=Retry(NoBackoff(), 0), max_connections=200,
+                        socket_timeout=10)
 SERVED_BY = os.environ.get("SERVED_BY", "local")
 DRAIN_S = float(os.environ.get("DRAIN_S", "6"))    # time to leave the load balancer; see README
 _stopping = threading.Event()

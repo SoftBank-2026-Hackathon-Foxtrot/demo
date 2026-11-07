@@ -15,6 +15,9 @@ Off unless CONTROL_PLANE_URL is set, so the app runs on its own as before.
   WORKLOAD_ACTOR           this process's role in the seed: goods-aws-api, goods-aws-worker, ...
   WORKLOAD_SCOPE           scope:goods
   OBJECT_MIGRATION_ID_FILE where the receipt bucket's migration ID is written for objroute
+
+The same answer also says which Redis route to use (redisroute.py), and every report says which
+route this process follows.
 """
 import asyncio
 import json
@@ -25,6 +28,8 @@ import threading
 import time
 import urllib.request
 from contextlib import asynccontextmanager, contextmanager
+
+from .redisroute import router as redis_router
 
 log = logging.getLogger("workload")
 
@@ -131,6 +136,7 @@ class Workload:
                 report = {"actorId": self.actor, "instanceId": instance, "generation": self.generation,
                           "state": state, "inFlight": self.in_flight,
                           "activeWebSockets": self.active_websockets}
+            report |= redis_router.report()
             try:
                 answer = self._post(url, report)
             except Exception as e:  # noqa: BLE001  keep the last order: a HOLD never lifts itself
@@ -147,6 +153,10 @@ class Workload:
                     log.info("platform says %s (generation %s)", answer["desired"], answer["generation"])
                 self.desired = answer["desired"]
                 self.generation = answer["generation"]
+            # Before the first `directed`: the first work of a new process already uses the route
+            # in force, so a process started during a migration never connects directly.
+            redis_router.apply(answer.get("redisRoute"), answer.get("redisEndpoint"),
+                               answer.get("redisRouteGeneration", 0))
             self.directed.set()
             self._follow_object_migration(answer.get("objectMigrationId"))
             time.sleep(answer.get("pollAfterMs", 5000) / 1000)
