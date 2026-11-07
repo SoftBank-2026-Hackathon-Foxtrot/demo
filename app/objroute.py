@@ -16,7 +16,6 @@ The app never deletes receipts, so the delete half of the protocol is not here.
 import json
 import logging
 import os
-import socket
 import threading
 import time
 import urllib.parse
@@ -25,6 +24,8 @@ import urllib.request
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
+
+from .instance import instance_id
 
 log = logging.getLogger("objroute")
 
@@ -77,7 +78,7 @@ class Store:
 
     def __init__(self, server: str, app: str | None = None, opener=open_bucket):
         self.server = server.rstrip("/")
-        self.app = app or f"{socket.gethostname()}-{os.getpid()}"
+        self.app = app or instance_id()
         self.opener = opener
         self.mu = threading.Lock()
         self.migration: str | None = None
