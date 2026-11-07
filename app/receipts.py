@@ -32,7 +32,10 @@ def client():
         _client = boto3.client(
             "s3", endpoint_url=os.environ.get("S3_ENDPOINT") or None, region_name=os.environ.get("S3_REGION", "us-east-1"),
             config=Config(signature_version="s3v4", s3={"addressing_style": "path"}, connect_timeout=1, read_timeout=10,
-                          retries={"max_attempts": 1}))
+                          retries={"max_attempts": 1},
+                          # GCS rejects the CRC headers newer SDKs add to every upload by default.
+                          request_checksum_calculation="when_required",
+                          response_checksum_validation="when_required"))
     return _client
 
 
