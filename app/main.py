@@ -278,15 +278,6 @@ def cache_check():
     return {"checked": checked, "mismatched": bad, "ok": not bad}
 
 
-app.include_router(api, prefix="/api")
-app.include_router(api)    # scripts and the load generator call these directly
-
-# The user screen. Mounted last: every route above takes priority.
-WEB_DIST = Path(__file__).parent.parent / "web" / "dist"
-if WEB_DIST.is_dir():
-    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
-
-
 @app.get("/api/migration-probe")
 def migration_probe(response: Response):
     """Read-only ingress sample; the normal workload gate still applies.
@@ -295,6 +286,16 @@ def migration_probe(response: Response):
     """
     response.headers["Cache-Control"] = "no-store, max-age=0"
     return {"ok": True}
+
+
+app.include_router(api, prefix="/api")
+app.include_router(api)    # scripts and the load generator call these directly
+
+# The user screen. Mounted last: every route above takes priority.
+WEB_DIST = Path(__file__).parent.parent / "web" / "dist"
+if WEB_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
+
 
 # Outer middleware includes migration HOLD wait in request duration.
 app.add_middleware(TraceMiddleware, telemetry=get_telemetry("app"))
