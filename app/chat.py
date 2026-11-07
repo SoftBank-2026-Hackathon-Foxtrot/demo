@@ -118,6 +118,7 @@ async def chat(ws: WebSocket):
         async with write_lock:
             await asyncio.wait_for(ws.send_json(data), 5)
 
+    workload.socket_opened()
     try:
         try:
             auth = await asyncio.wait_for(ws.receive_json(), 5)
@@ -292,6 +293,7 @@ async def chat(ws: WebSocket):
         with suppress(Exception):
             await ws.close(code=1013)
     finally:
+        workload.socket_closed()
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)

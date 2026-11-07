@@ -171,6 +171,7 @@ npm install && npm run dev
 | `WORKLOAD_ACTOR` | 없음 | 이 프로세스의 역할. 플랫폼 시드의 `actors` 이름 (`goods-aws-api`, `goods-aws-worker` 등). `CONTROL_PLANE_URL`이 있으면 필수 |
 | `WORKLOAD_TOKEN` | 없음 | 플랫폼의 heartbeat 토큰 |
 | `WORKLOAD_SCOPE` | `scope:goods` | 플랫폼 시드의 `scope` |
+| `WORKLOAD_INSTANCE` | 없음 | 컨테이너 이름. 보고하는 프로세스 ID가 `<호스트>-<이름>-<PID>`가 됨. 한 호스트 네트워크에서 컨테이너마다 PID 1로 도는 워커들이 서로 다른 프로세스로 잡히게 함 |
 
 ### 영수증 버킷 이전 따라가기
 
@@ -218,3 +219,7 @@ DB 전환에는 앱과 Worker의 실제 업무 정지가 필요합니다. [contr
 - 실제 알림 전송.
 
 `docker-compose.yml`과 `pgbouncer/userlist.txt`의 비밀번호는 로컬 전용 값입니다.
+
+## 마이그레이션 관측
+
+추가 필드와 연결 방법은 [관측 연결](docs/migration-observability.md)을 참고하세요.

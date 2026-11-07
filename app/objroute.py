@@ -16,7 +16,6 @@ The app never deletes receipts, so the delete half of the protocol is not here.
 import json
 import logging
 import os
-import socket
 import threading
 import time
 import urllib.parse
@@ -26,6 +25,8 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
+from .instance import instance_id
+
 log = logging.getLogger("objroute")
 
 INTERVAL_S = 1.0
@@ -34,8 +35,11 @@ LEASE_S = 5.0
 TERMINAL = {"COMPLETED", "ROLLED_BACK", "ABORTED", "FAILED"}
 # A request started inside the lease must end before the server stops waiting (APP_TTL, 10 s):
 # 5 s lease + at most 1 s connect + 2 s read.
+# Checksums only when an operation requires them: the newer SDK default adds CRC headers to every
+# upload, which GCS's S3-compatible API rejects (SignatureDoesNotMatch, Invalid argument).
 _BUCKET_CONFIG = Config(signature_version="s3v4", s3={"addressing_style": "path"}, connect_timeout=1,
-                        read_timeout=2, retries={"max_attempts": 1})
+                        read_timeout=2, retries={"max_attempts": 1},
+                        request_checksum_calculation="when_required", response_checksum_validation="when_required")
 
 
 class StaleRoute(Exception):
@@ -77,7 +81,7 @@ class Store:
 
     def __init__(self, server: str, app: str | None = None, opener=open_bucket):
         self.server = server.rstrip("/")
-        self.app = app or f"{socket.gethostname()}-{os.getpid()}"
+        self.app = app or instance_id()
         self.opener = opener
         self.mu = threading.Lock()
         self.migration: str | None = None
