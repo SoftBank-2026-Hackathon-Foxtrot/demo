@@ -29,6 +29,7 @@ import time
 import urllib.request
 from contextlib import asynccontextmanager, contextmanager
 
+from .telemetry import get_telemetry
 from .redisroute import router as redis_router
 
 log = logging.getLogger("workload")
@@ -57,6 +58,8 @@ class Workload:
         self.active_websockets = 0
         self.migration_id: str | None = None
         self.thread: threading.Thread | None = None
+        self.observation_thread: threading.Thread | None = None
+        self.observation_stop = threading.Event()
 
     # ---- the gate ---------------------------------------------------------------------------
     def _enter(self) -> bool:
@@ -84,7 +87,13 @@ class Workload:
     async def gate(self):
         """For the API: wait while held, at most GATE_LIMIT_S."""
         if not ENABLED:
-            yield
+            with self.lock:
+                self.in_flight += 1
+            try:
+                with get_telemetry("app").operation("APP_WORK"):
+                    yield
+            finally:
+                self._leave()
             return
         deadline = time.monotonic() + GATE_LIMIT_S
         while not self._enter():
@@ -92,7 +101,8 @@ class Workload:
                 raise HoldTimeout
             await asyncio.sleep(0.02)
         try:
-            yield
+            with get_telemetry("app").operation("APP_WORK"):
+                yield
         finally:
             self._leave()
 
@@ -100,12 +110,19 @@ class Workload:
     def working(self):
         """For a queue worker: one batch. Blocks while held, with no limit: nobody is waiting."""
         if not ENABLED:
-            yield
+            with self.lock:
+                self.in_flight += 1
+            try:
+                with get_telemetry("app").operation("APP_WORK"):
+                    yield
+            finally:
+                self._leave()
             return
         while not self._enter():
             time.sleep(0.05)
         try:
-            yield
+            with get_telemetry("app").operation("APP_WORK"):
+                yield
         finally:
             self._leave()
 
@@ -116,12 +133,32 @@ class Workload:
 
     # ---- the report -------------------------------------------------------------------------
     def start(self) -> None:
+        if get_telemetry("app").enabled and not self.observation_thread:
+            self.observation_thread = threading.Thread(target=self._observe, name="otel-workload", daemon=True)
+            self.observation_thread.start()
         if not ENABLED or self.thread:
             return
         if not self.actor:
             raise RuntimeError("CONTROL_PLANE_URL is set but WORKLOAD_ACTOR is not")
         self.thread = threading.Thread(target=self._run, name="workload", daemon=True)
         self.thread.start()
+
+    def _observe(self):
+        telemetry = get_telemetry("app")
+        attrs = {"actor.id": self.actor or "unregistered", "environment": os.getenv("SERVED_BY", "unknown")}
+        while not self.observation_stop.is_set():
+            with self.lock:
+                values = {"inflight": self.in_flight, "activewebsockets": self.active_websockets}
+            for key, value in values.items():
+                telemetry.measure("foxtrot.app." + key, value, attrs)
+            telemetry.measure("foxtrot.app.redis_stale_connections",
+                              redis_router.report().get("redisStaleConnections"), attrs)
+            self.observation_stop.wait(5)
+
+    def stop_observations(self):
+        self.observation_stop.set()
+        if self.observation_thread:
+            self.observation_thread.join(timeout=2)
 
     def _run(self) -> None:
         instance = f"{socket.gethostname()}-{os.getpid()}"
@@ -164,7 +201,8 @@ class Workload:
     def _post(self, url: str, body: dict) -> dict:
         request = urllib.request.Request(
             url, data=json.dumps(body).encode(), method="POST",
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"})
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.token}",
+                     **get_telemetry("app").headers()})
         with urllib.request.urlopen(request, timeout=5) as response:
             return json.load(response)
 

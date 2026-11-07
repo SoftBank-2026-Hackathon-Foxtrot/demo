@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from redis.backoff import NoBackoff
 from redis.retry import Retry
 
+from .telemetry import TraceMiddleware, get_telemetry
 from . import chat, metrics, receipts
 from .db import close_job, connect, init_schema
 from .redisroute import router as redis_router
@@ -60,7 +61,11 @@ async def lifespan(_app: FastAPI):
 
     if callable(previous):
         signal.signal(signal.SIGTERM, on_term)
-    yield
+    try:
+        yield
+    finally:
+        await asyncio.to_thread(workload.stop_observations)
+        await asyncio.to_thread(get_telemetry("app").close)
 
 
 app = FastAPI(title="chiikawa group-buy", lifespan=lifespan)
@@ -290,3 +295,6 @@ def migration_probe(response: Response):
     """
     response.headers["Cache-Control"] = "no-store, max-age=0"
     return {"ok": True}
+
+# Outer middleware includes migration HOLD wait in request duration.
+app.add_middleware(TraceMiddleware, telemetry=get_telemetry("app"))

@@ -1,9 +1,27 @@
-# 마이그레이션 관측
+# 앱 OTEL 관측
 
-앱을 재배포하면 `GET /api/migration-probe`가 HTTP 200, {"ok":true}, Cache-Control:no-store와 기존 X-Served-By를 반환합니다. 일반 workload gate를 거치므로 HOLD 중 대기도 관측됩니다. DB·Redis·객체 업무 검증은 컨트롤 플레인의 기존 BusinessProbe가 담당합니다.
+`app/main.py`의 외부 HTTP middleware가 HOLD 대기를 포함한 요청 span을 만듭니다. `app/workload.py`는 API/worker 작업 span과 독립 5초 in-flight/WebSocket/Redis 잔존 연결 수치를 발행합니다. 업무 입력·SQL·Redis key·토큰은 기록하지 않습니다. CP의 probe 요청 context를 추출해 작업 추적을 연결합니다.
 
-각 인스턴스의 SERVED_BY를 컨트롤 플레인의 PUBLIC_PROBE_SERVED_BY 매핑에 등록하고 Cloudflare 공용 URL을 PUBLIC_PROBE_URL에 설정합니다. 캐시 규칙에서도 이 경로를 캐시하지 않습니다. /readyz는 HOLD 영향 측정에 사용하지 않습니다.
+기존 workload heartbeat와 Redis route 지시는 제어에 사용하므로 유지합니다. CP는 actor 요약에 workflow ID를 붙여 OTEL snapshot으로 내보냅니다. heartbeat를 중단시키는 방식으로 telemetry를 끄면 안 됩니다.
 
-기존 heartbeat에 activeWebSockets를 추가했습니다. 연결은 시작/종료에서 집계하며 DB 업무 정지용 inFlight와 합치지 않습니다. 기존 CONTROL_PLANE_URL, WORKLOAD_TOKEN, WORKLOAD_ACTOR를 사용합니다. token이 없는 공개 probe는 읽기 전용이며 데이터 저장소를 조회하지 않습니다.
+`/api/migration-probe`는 무캐시 `{"ok":true}`와 X-Served-By를 반환하며 workload gate를 거칩니다. CP의 공용 URL·SERVED_BY 매핑을 설정합니다. /readyz는 HOLD 영향 측정용이 아닙니다. WebSocket 수와 DB 업무 in-flight는 별도입니다.
 
-검사: requirements.txt와 httpx를 설치한 환경에서 `python -m unittest discover -s tests -v`.
+일반 사용자 요청의 trace 양을 제한하려면 앱에 `OTEL_TRACES_SAMPLER=parentbased_traceidratio`, `OTEL_TRACES_SAMPLER_ARG=0.1`을 설정합니다. 샘플된 CP 부모 trace는 이어집니다. 브라우저에 Collector 토큰을 전달하지 않습니다.
+
+검사: `python -m unittest discover -s tests -v`.
+
+## OTEL 실행 설정
+
+공식 OpenTelemetry SDK가 OTLP HTTP/protobuf로 로그·메트릭·트레이스를 내보냅니다. 아래 값을 **프로세스 환경**에 주입합니다. endpoint가 없거나 `OTEL_SDK_DISABLED=true`이면 전송하지 않습니다. `.env` 파일을 만드는 것만으로 Python 프로세스 환경이 바뀌지는 않습니다.
+
+```dotenv
+OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.internal:4318
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
+OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20<module-ingest-token>
+```
+
+Collector는 IaC의 `observability/compose.yaml`로 준비합니다. Collector → CP에는 별도 `OBSERVATION_TOKEN`을 씁니다. 모듈에 CP 수신 토큰을 주지 않습니다. 운영 주소는 사설망/VPN에서 접근하도록 구성하고, TLS를 사용하는 경우 SDK의 `OTEL_EXPORTER_OTLP_CERTIFICATE`와 HTTPS endpoint를 설정합니다. 앱 환경 값·DSN·Terraform output·원시 키·오류 원문은 전송하지 않습니다.
+
+진행 상태는 OTEL 구조화 로그 → Collector → CP의 `OBS_LATEST`/24시간 이력, 수치는 Prometheus, 작업 span은 Tempo에 저장합니다. 플랫폼은 CP API만 조회합니다. 제어 명령·승인·멱등성·판정 근거는 기존 저장소가 원본이며 OTEL 전송 성공을 전환 조건으로 사용하지 않습니다. 관측이 끊겨도 이전 값을 0이나 성공으로 바꾸지 않습니다.
+
+Python `telemetry.py`/`telemetry_contract.py`는 독립 이미지에 포함한 공통 계약 v1 사본입니다. 계약을 바꾸면 CP와 모든 Python 발행자의 사본 및 SDK 계약 테스트를 함께 갱신합니다. metric에는 operation/transition ID·키·URL을 label로 넣지 않으며, 값 캐시는 최대 2048 series/20초입니다. workflow ID는 마이그레이션별 화면 조회를 위한 제한된 차원입니다.
