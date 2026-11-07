@@ -1,0 +1,21 @@
+# Linux app-host agent; can run standalone or alongside docker-compose.yml.
+# docker compose --env-file .env.otel -f compose.observability.yml up -d
+services:
+  otel-system:
+    image: otel/opentelemetry-collector-contrib:0.147.0
+    command: [--config=/etc/otelcol/config.yaml]
+    environment:
+      OTEL_APPLICATION_ID: ${OTEL_APPLICATION_ID:-goods}
+      SERVED_BY: ${SERVED_BY:?set the registered environment name}
+      OTEL_HOST_NAME: ${OTEL_HOST_NAME:?set a unique stable name for this app host}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:?set the central collector URL}
+      OTEL_INGEST_TOKEN: ${OTEL_INGEST_TOKEN:?set the central collector ingest token}
+    network_mode: host
+    volumes:
+      - ./observability/collector.yaml:/etc/otelcol/config.yaml:ro
+      - /:/hostfs:ro,rslave
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    restart: unless-stopped
