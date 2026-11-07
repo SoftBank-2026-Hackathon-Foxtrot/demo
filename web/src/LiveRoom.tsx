@@ -5,6 +5,7 @@ import { isOpen, Tile, won } from "./GoodsList";
 import { useChat } from "./useChat";
 import { MigrationStatus } from "./MigrationStatus";
 import { FloatingChat } from "./FloatingChat";
+import { OrderPulse } from "./OrderPulse";
 
 export function LiveRoom({ sid, name, goods, onPick, onSessionLost }: {
   sid: string; name: string | null; goods: GroupBuy[]; onPick: (g: GroupBuy) => void; onSessionLost: () => void;
@@ -27,7 +28,8 @@ export function LiveRoom({ sid, name, goods, onPick, onSessionLost }: {
     <section className="live-section" aria-labelledby="live-title">
       <h1 id="live-title" className="sr-only">라이브 공구</h1>
       <MigrationStatus sid={sid} since={chat.measuredSince} liveIds={chat.liveIds} chatEnvironment={chat.info.environment} connected={chat.status === "connected"} onSessionLost={onSessionLost} />
-      <div className="chat-bot-controls live-traffic-controls"><div className="chat-bot-row"><button type="button" className={`chat-bot-toggle ${chat.bot.rate?"running":""}`} aria-pressed={chat.bot.rate>0} disabled={chat.status!=="connected"||(!chat.bot.rate&&!validBotRate)} onClick={()=>chat.setBotRate(chat.bot.rate?0:Number(botRate))}>{chat.bot.rate?<Pause size={14}/>:<Play size={14}/>} {chat.bot.rate?"봇 정지":"채팅 봇 시작"}</button><label htmlFor="chat-bot-rate">트래픽</label><input id="chat-bot-rate" type="number" min={1} max={1000} step={1} value={botRate} aria-invalid={!validBotRate} onChange={e=>{setBotRate(e.target.value);const rate=Number(e.target.value);if(chat.bot.rate&&Number.isInteger(rate)&&rate>=1&&rate<=1000)chat.setBotRate(rate);}}/><span>개/초</span></div><p className={chat.bot.rate||!validBotRate?"":"sr-only"} role="status">{!validBotRate?"초당 1~1,000개로 입력해 주세요.":chat.bot.rate?`실행 중 · 목표 ${chat.bot.rate.toLocaleString()}개/초 · 이 화면을 닫으면 정지`:"자동 채팅 대기 중"}</p>{chat.bot.error&&<p className="error" role="alert">{chat.bot.error}</p>}</div>
+      <OrderPulse sid={sid} onSessionLost={onSessionLost}/>
+      <div className="chat-bot-controls live-traffic-controls"><div className="chat-bot-row"><button type="button" className={`chat-bot-toggle ${chat.bot.rate?"running":""}`} aria-pressed={chat.bot.rate>0} disabled={chat.status!=="connected"||(!chat.bot.rate&&!validBotRate)} onClick={()=>chat.setBotRate(chat.bot.rate?0:Number(botRate))}>{chat.bot.rate?<Pause size={14}/>:<Play size={14}/>} {chat.bot.rate?"채팅 정지":"채팅 시작"}</button><label htmlFor="chat-bot-rate" className="sr-only">초당 채팅 수</label><input id="chat-bot-rate" type="number" min={1} max={1000} step={1} value={botRate} aria-invalid={!validBotRate} onChange={e=>{setBotRate(e.target.value);const rate=Number(e.target.value);if(chat.bot.rate&&Number.isInteger(rate)&&rate>=1&&rate<=1000)chat.setBotRate(rate);}}/><span>개/초</span></div><p className={chat.bot.rate||!validBotRate?"":"sr-only"} role="status">{!validBotRate?"초당 1~1,000개로 입력해 주세요.":chat.bot.rate?`목표 ${chat.bot.rate.toLocaleString()}개/초`:"자동 채팅 대기 중"}</p>{chat.bot.error&&<p className="error" role="alert">{chat.bot.error}</p>}</div>
       <div className="broadcast-layout">
         <div className="broadcast-main">
           <div className={`broadcast-stage ${dancing ? "is-dancing" : "dance-paused"}`}>

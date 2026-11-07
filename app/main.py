@@ -29,7 +29,7 @@ from redis.backoff import NoBackoff
 from redis.retry import Retry
 
 from .telemetry import TraceMiddleware, get_telemetry
-from . import chat, metrics, receipts
+from . import chat, metrics, receipts, order_demo
 from .db import close_job, connect, init_schema
 from .redisroute import router as redis_router
 from .workload import HoldTimeout, workload
@@ -176,6 +176,24 @@ def my_requests(x_session: str | None = Header(None)):
         "JOIN groupbuys g ON g.id = r.groupbuy_id LEFT JOIN orders o ON o.request_id = r.request_id "
         "WHERE r.user_id=%s ORDER BY r.created_ms DESC LIMIT 50", (uid,)).fetchall()
     return [{"id": x[0], "title": x[1], "qty": x[2], "status": x[3], "created_ms": x[4], "receipt": x[5]} for x in rows]
+
+
+@api.post("/live/orders/prepare")
+def prepare_order_demo(x_session: str | None = Header(None)):
+    user_of(x_session)
+    return order_demo.prepare()
+
+
+@api.get("/live/orders")
+def order_demo_snapshot(x_session: str | None = Header(None)):
+    user_of(x_session)
+    return order_demo.snapshot()
+
+
+@api.post("/live/orders")
+def submit_order_demo(batch: order_demo.OrderBatch, x_session: str | None = Header(None),
+                      idempotency_key: str = Header(..., min_length=1, max_length=96)):
+    return order_demo.submit(user_of(x_session), batch.count, idempotency_key, r)
 
 
 @api.get("/me/receipts/{request_id}")

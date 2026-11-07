@@ -1,0 +1,5 @@
+# Opt-in local order traffic. The endpoint is disabled without this flag.
+services:
+  app:
+    environment:
+      ENABLE_ORDER_DEMO: '1'

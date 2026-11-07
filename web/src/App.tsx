@@ -91,7 +91,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
       <NavBar view={view} query={query} onView={setView} onQuery={(v) => { setQuery(v); if (view === "orders") setView("all"); }} />
       {offline && <Connection />}
       <main className="shop-content pb-16">
-        {goods && <div hidden={view !== "live" || searching}><LiveRoom sid={sid} name={name} goods={goods} onPick={setPicked} onSessionLost={onLeave} /></div>}
+        {goods && view === "live" && !searching && <LiveRoom sid={sid} name={name} goods={goods} onPick={setPicked} onSessionLost={onLeave} />}
         {view === "orders" ? (
           <Orders sid={sid} orders={orders} />
         ) : !goods ? (
@@ -99,7 +99,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
         ) : view === "closing" || searching || view === "all" ? (
           <GoodsGrid goods={shown} title={view === "closing" ? "마감 임박" : searching ? "검색 결과" : "전체 상품"} onPick={setPicked} />
         ) : (
-          <div className="more-goods"><GoodsGrid goods={goods} title="상품 목록" onPick={setPicked} /></div>
+          null
         )}
       </main>
       <JoinSheet
@@ -114,7 +114,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
           void refreshGoods();
         }}
       />
-      <footer className="shop-footer"><small>해커톤 시연용 · 비공식 데모 · 실제 결제 및 배송 없음</small></footer>
+      {view!=="live"&&<footer className="shop-footer"><small>해커톤 시연용 · 비공식 데모 · 실제 결제 및 배송 없음</small></footer>}
     </div>
   );
 }

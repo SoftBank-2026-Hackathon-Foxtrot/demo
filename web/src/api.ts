@@ -46,11 +46,11 @@ function saveSession(sid: string | null) {
   }
 }
 
-async function call<T>(path: string, sid: string | null, method = "GET", extra: Record<string, string> = {}, body?: unknown): Promise<T> {
+async function call<T>(path: string, sid: string | null, method = "GET", extra: Record<string, string> = {}, body?: unknown, signal?: AbortSignal): Promise<T> {
   const headers: Record<string, string> = { ...extra };
   if (sid) headers["x-session"] = sid;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const r = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const r = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
   if (r.status === 401) throw new SessionLost();
   if (!r.ok) throw new Error(`${r.status}`);
   return r.json() as Promise<T>;
@@ -92,3 +92,8 @@ export function newOrderKey(): string {
 
 export const join = (sid: string, id: number, qty: number, key: string) =>
   call<{ request_id: string }>(`/groupbuys/${id}/join?qty=${qty}`, sid, "POST", { "Idempotency-Key": key });
+
+export type OrderPulse = {stock:number;initial:number;title:string;accepted:number;confirmed:number;pending:number;sold_out:number;confirmed_qty:number;confirmed_per_second:number;at:number;product_id:number};
+export const prepareOrderDemo = (sid:string,signal:AbortSignal)=>call<OrderPulse>("/live/orders/prepare",sid,"POST",{},undefined,signal);
+export const readOrderPulse = (sid:string,signal:AbortSignal)=>call<OrderPulse>("/live/orders",sid,"GET",{},undefined,signal);
+export const sendOrderBatch = (sid:string,count:number,key:string)=>call<{accepted:number}>("/live/orders",sid,"POST",{"Idempotency-Key":key},{count});
