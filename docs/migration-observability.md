@@ -25,3 +25,11 @@ Collector는 IaC의 `observability/compose.yaml`로 준비합니다. Collector �
 진행 상태는 OTEL 구조화 로그 → Collector → CP의 `OBS_LATEST`/24시간 이력, 수치는 Prometheus, 작업 span은 Tempo에 저장합니다. 플랫폼은 CP API만 조회합니다. 제어 명령·승인·멱등성·판정 근거는 기존 저장소가 원본이며 OTEL 전송 성공을 전환 조건으로 사용하지 않습니다. 관측이 끊겨도 이전 값을 0이나 성공으로 바꾸지 않습니다.
 
 Python `telemetry.py`/`telemetry_contract.py`는 독립 이미지에 포함한 공통 계약 v1 사본입니다. 계약을 바꾸면 CP와 모든 Python 발행자의 사본 및 SDK 계약 테스트를 함께 갱신합니다. metric에는 operation/transition ID·키·URL을 label로 넣지 않으며, 값 캐시는 최대 2048 series/20초입니다. workflow ID는 마이그레이션별 화면 조회를 위한 제한된 차원입니다.
+
+## 앱 시스템 지표
+
+앱 시스템 지표는 새 이미지의 `app/system_metrics.py`가 발행합니다. `OTEL_SYSTEM_METRICS=container`, `OTEL_APPLICATION_ID`, `OTEL_OWNER_ID`, `OTEL_DEPLOYMENT_ID`, `SERVED_BY`와 OTLP endpoint/headers가 필요합니다. 소유자와 배포 ID는 플랫폼 배포 기록에서 주입하며 앱 이름만으로 합산하지 않습니다. API worker 여러 개 중 한 프로세스만 10초마다 발행하고 종료 시 다른 프로세스가 이어받습니다.
+
+CPU 사용 시간·메모리·디스크 I/O는 현재 프로세스가 속한 컨테이너 cgroup을 읽습니다. CPU·메모리 제한이 없으면 사용량만 제공하고 비율은 비웁니다. 호스트 CPU/메모리 및 공유 디스크 용량은 수집하지 않습니다. Docker/온프렘의 네트워크는 분리된 컨테이너 namespace 기준입니다. Fargate/Cloud Run은 같은 앱 실행 묶음의 API·워커·터널이 네트워크를 공유하므로 `OTEL_NETWORK_SCOPE=app-instance`로 표시하고 API만 발행합니다. 지원하지 않는 커널 지표는 0 대신 누락으로 처리합니다.
+
+기존 `compose.observability.yml` 호스트 에이전트는 제거했습니다. 이미 실행한 에이전트는 중단해야 합니다. 기존 호스트 지표는 새 조회 조건에 포함되지 않습니다. 로컬 예시는 `docker compose --env-file .env.otel up --build`이며 `.env.otel.example`을 참고합니다. 원격 배포는 새 이미지와 프로비저너 설정을 함께 적용해야 합니다.

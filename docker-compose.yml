@@ -35,10 +35,16 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_SYSTEM_METRICS: ${OTEL_SYSTEM_METRICS:-}
+      OTEL_APPLICATION_ID: ${OTEL_APPLICATION_ID:-}
+      OTEL_OWNER_ID: ${OTEL_OWNER_ID:-}
+      OTEL_DEPLOYMENT_ID: ${OTEL_DEPLOYMENT_ID:-}
+      OTEL_APP_ROLE: api
+      OTEL_NETWORK_SCOPE: container
       REDIS_URL: redis://redis:6379
       DATABASE_URL: postgresql://app:apppw@db-proxy.internal:6432/appdb
       S3_ENDPOINT: http://s3:9090
-      SERVED_BY: local
+      SERVED_BY: ${SERVED_BY:-local}
       AWS_ACCESS_KEY_ID: local
       AWS_SECRET_ACCESS_KEY: local
     ports: ["8000:8000"]
@@ -48,11 +54,15 @@ services:
   worker1:
     build: .
     command: python -m app.worker --name w1 --reconciler
-    environment: *appenv
+    environment:
+      <<: *appenv
+      OTEL_APP_ROLE: worker
     depends_on: [app]
 
   worker2:
     build: .
     command: python -m app.worker --name w2
-    environment: *appenv
+    environment:
+      <<: *appenv
+      OTEL_APP_ROLE: worker
     depends_on: [app]
