@@ -1,0 +1,56 @@
+# Redis design 3-8 locally: the app reaches Redis directly and follows the platform's Redis route.
+# On top of the migration demo:
+#   docker compose -p redis-direct -f docker-compose.yml -f compose.migration.yml -f compose.direct.yml up -d --build
+# The platform side is scripts/e2e_redis_route.py, which serves the workload heartbeat on the host
+# (port 18600) with control-plane's own coordinator and drives the migration.
+x-direct-urls: &direct_urls aws=redis://app-direct:directpw@redis:6379,gcp=redis://app-direct:directpw@redis-gcp:6379
+x-valkey-cmd: &valkey_cmd ["valkey-server", "--requirepass", "adminpw",
+  "--user", "app", "on", ">apppw", "~*", "&*", "+@all",
+  "--user", "app-direct", "on", ">directpw", "~*", "&*", "+@all"]
+x-platform: &platform
+  CONTROL_PLANE_URL: http://host.docker.internal:18600
+  WORKLOAD_TOKEN: e2e-workload-token
+  WORKLOAD_SCOPE: scope:goods
+  REDIS_DIRECT_URLS: *direct_urls
+
+services:
+  redis:
+    command: *valkey_cmd
+    ports: ["127.0.0.1:16501:6379"]
+  redis-gcp:
+    command: *valkey_cmd
+    ports: ["127.0.0.1:16502:6379"]
+  statemig:
+    environment:
+      STATEMIG_DIRECT_USER: app-direct
+  app:
+    environment:
+      <<: *platform
+      WORKLOAD_ACTOR: goods-aws-api
+      REDIS_URL: redis://app-direct:directpw@redis:6379
+      REDIS_PROXY_URL: redis://app:app-proxy-pw@proxy:6379
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  worker1:
+    environment:
+      <<: *platform
+      WORKLOAD_ACTOR: goods-aws-worker
+      REDIS_URL: redis://app-direct:directpw@redis:6379
+      REDIS_PROXY_URL: redis://worker:worker-proxy-pw@proxy:6379
+      DATABASE_URL: postgresql://app:apppw@db-proxy.internal:6432/appdb
+      S3_ENDPOINT: http://s3:9090
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  worker2:
+    environment:
+      <<: *platform
+      WORKLOAD_ACTOR: goods-aws-worker
+      REDIS_URL: redis://app-direct:directpw@redis:6379
+      REDIS_PROXY_URL: redis://worker:worker-proxy-pw@proxy:6379
+      DATABASE_URL: postgresql://app:apppw@db-proxy.internal:6432/appdb
+      S3_ENDPOINT: http://s3:9090
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  app-gcp:
+    profiles: ["unused"]   # one environment of app processes is enough here
