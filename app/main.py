@@ -279,3 +279,13 @@ app.include_router(api)    # scripts and the load generator call these directly
 WEB_DIST = Path(__file__).parent.parent / "web" / "dist"
 if WEB_DIST.is_dir():
     app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
+
+
+@app.get("/api/migration-probe")
+def migration_probe(response: Response):
+    """Read-only ingress sample; the normal workload gate still applies.
+
+    This measures reachability and HOLD latency. Business probes verify stores.
+    """
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return {"ok": True}

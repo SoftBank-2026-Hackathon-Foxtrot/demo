@@ -49,6 +49,7 @@ class Workload:
         self.desired = "RUN"
         self.generation = 0
         self.in_flight = 0
+        self.active_websockets = 0
         self.migration_id: str | None = None
         self.thread: threading.Thread | None = None
 
@@ -61,6 +62,14 @@ class Workload:
                 self.in_flight += 1
                 return True
             return False
+
+    def socket_opened(self):
+        with self.lock:
+            self.active_websockets += 1
+
+    def socket_closed(self):
+        with self.lock:
+            self.active_websockets -= 1
 
     def _leave(self) -> None:
         with self.lock:
@@ -120,7 +129,8 @@ class Workload:
                 else:
                     state = "RUNNING"
                 report = {"actorId": self.actor, "instanceId": instance, "generation": self.generation,
-                          "state": state, "inFlight": self.in_flight}
+                          "state": state, "inFlight": self.in_flight,
+                          "activeWebSockets": self.active_websockets}
             try:
                 answer = self._post(url, report)
             except Exception as e:  # noqa: BLE001  keep the last order: a HOLD never lifts itself
