@@ -23,7 +23,7 @@ import urllib.request
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 
 from .instance import instance_id
 
@@ -191,12 +191,29 @@ class Store:
             if self.in_flight[g] == 0:
                 del self.in_flight[g]
 
+    def _bucket(self, e: dict):
+        """The endpoint's client, made again if it was dropped."""
+        client = self.buckets.get(_key(e))
+        if client is None:
+            client = self.buckets[_key(e)] = self.opener(e)
+        return client
+
+    def _forget(self, e: dict):
+        """A client made while no credentials could be found keeps failing: the SDK resolves them
+        once, at creation. Dropping it lets the next request pick up credentials that appeared
+        since (an instance role reachable again, keys rotated in)."""
+        self.buckets.pop(_key(e), None)
+
     def put(self, key: str, body: bytes, content_type: str = "application/octet-stream") -> str:
         """Writes to the route's write bucket; returns that bucket's name."""
         r = self._begin()
         try:
             e = r["write"]
-            self.buckets[_key(e)].put_object(Bucket=e["bucket"], Key=key, Body=body, ContentType=content_type)
+            try:
+                self._bucket(e).put_object(Bucket=e["bucket"], Key=key, Body=body, ContentType=content_type)
+            except NoCredentialsError:
+                self._forget(e)
+                raise
             return e["bucket"]
         finally:
             self._end(r)
@@ -207,8 +224,11 @@ class Store:
         try:
             for e in r["read"]:
                 try:
-                    obj = self.buckets[_key(e)].get_object(Bucket=e["bucket"], Key=key)
+                    obj = self._bucket(e).get_object(Bucket=e["bucket"], Key=key)
                     return obj["Body"].read(), e["bucket"]
+                except NoCredentialsError:
+                    self._forget(e)
+                    raise
                 except ClientError as err:
                     if err.response["Error"]["Code"] in ("NoSuchKey", "404", "NotFound"):
                         continue   # not copied there yet: the next bucket
