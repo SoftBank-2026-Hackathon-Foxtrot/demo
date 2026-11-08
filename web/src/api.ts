@@ -26,6 +26,9 @@ export type Receipt = {
 };
 
 export class SessionLost extends Error {}
+export class ApiError extends Error {
+  constructor(public status: number, public detail: string) { super(`${status}`); }
+}
 
 const SESSION_KEY = "groupbuy-session";
 
@@ -52,7 +55,10 @@ async function call<T>(path: string, sid: string | null, method = "GET", extra: 
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const r = await fetch(`/api${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), signal });
   if (r.status === 401) throw new SessionLost();
-  if (!r.ok) throw new Error(`${r.status}`);
+  if (!r.ok) {
+    const payload = await r.json().catch(() => null) as { detail?: unknown } | null;
+    throw new ApiError(r.status, typeof payload?.detail === "string" ? payload.detail : "");
+  }
   return r.json() as Promise<T>;
 }
 
@@ -95,5 +101,6 @@ export const join = (sid: string, id: number, qty: number, key: string) =>
 
 export type OrderPulse = {stock:number;initial:number;title:string;accepted:number;confirmed:number;pending:number;sold_out:number;confirmed_qty:number;confirmed_per_second:number;at:number;product_id:number};
 export const prepareOrderDemo = (sid:string,signal:AbortSignal)=>call<OrderPulse>("/live/orders/prepare",sid,"POST",{},undefined,signal);
-export const readOrderPulse = (sid:string,signal:AbortSignal)=>call<OrderPulse>("/live/orders",sid,"GET",{},undefined,signal);
-export const sendOrderBatch = (sid:string,count:number,key:string)=>call<{accepted:number}>("/live/orders",sid,"POST",{"Idempotency-Key":key},{count});
+export const readOrderPulse = (sid:string,signal:AbortSignal,productId?:number)=>call<OrderPulse>(`/live/orders${productId?`?product_id=${productId}`:""}`,sid,"GET",{},undefined,signal);
+export const startOrderDemo = (sid:string,stock:number,key:string)=>call<OrderPulse>("/live/orders/prepare",sid,"POST",{"Idempotency-Key":key},{stock});
+export const sendOrderBatch = (sid:string,count:number,key:string,productId?:number)=>call<{accepted:number}>("/live/orders",sid,"POST",{"Idempotency-Key":key},{count,...(productId?{product_id:productId}:{})});

@@ -43,6 +43,7 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
   const [picked, setPicked] = useState<GroupBuy | null>(null);
   const [view, setView] = useState<View>("live");
   const [query, setQuery] = useState("");
+  const [liveSettings, setLiveSettings] = useState(false);
 
   const fail = useCallback((e: unknown) => {
     if (e instanceof SessionLost) onLeave();
@@ -87,11 +88,11 @@ function Shop({ sid, name, onLeave, onLogout }: { sid: string; name: string | nu
 
   return (
     <div className="min-h-[100dvh]">
-      <Header name={name} count={orders?.length ?? 0} onCart={() => setView("orders")} onLogout={onLogout} />
+      <Header name={name} count={orders?.length ?? 0} onCart={() => setView("orders")} onLogout={onLogout} onLiveSettings={() => { setView("live"); setQuery(""); setLiveSettings(true); }} />
       <NavBar view={view} query={query} onView={setView} onQuery={(v) => { setQuery(v); if (view === "orders") setView("all"); }} />
       {offline && <Connection />}
       <main className="shop-content pb-16">
-        {goods && view === "live" && !searching && <LiveRoom sid={sid} name={name} goods={goods} onPick={setPicked} onSessionLost={onLeave} />}
+        {goods && view === "live" && !searching && <LiveRoom sid={sid} name={name} goods={goods} onPick={setPicked} onSessionLost={onLeave} settingsOpen={liveSettings} onSettingsClose={() => setLiveSettings(false)} />}
         {view === "orders" ? (
           <Orders sid={sid} orders={orders} />
         ) : !goods ? (

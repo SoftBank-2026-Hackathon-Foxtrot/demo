@@ -13,7 +13,7 @@ export function FloatingChat({ messages, liveIds }: { messages: ChatMessage[]; l
   const reducedMotion = useReducedMotion();
   useEffect(() => {
     const receivedAt = Date.now();
-    const incoming = messages.filter(message => liveIds.has(message.id) && !seen.current.has(message.id));
+    const incoming = messages.filter(message => message.source !== "human" && liveIds.has(message.id) && !seen.current.has(message.id));
     if (!incoming.length) return;
     for (const message of incoming) seen.current.add(message.id);
     if (seen.current.size > 2000) seen.current = new Set(messages.map(message => message.id));

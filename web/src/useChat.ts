@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
-export type ChatMessage = { id: string; user: string; text: string; at: number };
+export type ChatMessage = { id: string; user: string; text: string; at: number; source?: "human" | "bot" };
 type Connection = "connecting" | "connected" | "reconnecting";
 
 export function useChat(sid: string, onSessionLost: () => void) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [humanMessages, setHumanMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<Connection>("connecting");
   const [error, setError] = useState("");
   const [bot, setBot] = useState({ rate: 0, error: "" });
@@ -54,6 +55,7 @@ export function useChat(sid: string, onSessionLost: () => void) {
           if (liveIds.current.size > 20000) liveIds.current.delete(liveIds.current.values().next().value!);
           merge([data.message]);
           if (!seen.has(data.message.id)) {
+            if (data.message.source === "human") setHumanMessages(previous => [...previous, data.message].slice(-40));
             seen.add(data.message.id);
             if (seen.size > 1000) seen.delete(seen.values().next().value!);
             setInfo((i) => ({ ...i, received: i.received + 1 }));
@@ -112,5 +114,5 @@ export function useChat(sid: string, onSessionLost: () => void) {
     if (socket.current?.readyState !== WebSocket.OPEN || status !== "connected") return;
     socket.current.send(JSON.stringify({ type: "bot", rate }));
   }
-  return { messages, status, error, pending, info, send, editPending, bot, setBotRate, measuredSince, liveIds };
+  return { messages, humanMessages, status, error, pending, info, send, editPending, bot, setBotRate, measuredSince, liveIds };
 }

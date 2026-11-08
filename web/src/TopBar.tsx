@@ -1,13 +1,13 @@
 import { MagnifyingGlass, PawPrint, ShoppingCart, SignIn, SignOut, WarningCircle } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 
-export function Brand({ className = "" }: { className?: string }) {
+export function Brand({ className = "", onLiveSettings }: { className?: string; onLiveSettings?: () => void }) {
   return (
     <span className={`flex items-center gap-2 font-display text-brown ${className}`}>
       <span className="grid size-13 place-items-center rounded-full border-2 border-accent bg-surface text-accent md:size-16">
         <PawPrint size={32} weight="fill" />
       </span>
-      <span className="text-2xl md:text-[32px]">치이카와 <span className="brand-live">LIVE</span></span>
+      <span className="text-2xl md:text-[32px]">치이카와 {onLiveSettings ? <button type="button" className="brand-live" aria-label="LIVE 설정" aria-haspopup="dialog" onClick={onLiveSettings}>LIVE</button> : <span className="brand-live">LIVE</span>}</span>
     </span>
   );
 }
@@ -24,11 +24,11 @@ function Circle({ label, tint, onClick, badge, children }: { label: string; tint
 
 type View = "live" | "all" | "closing" | "orders";
 
-export function Header({ name, count, onCart, onLogout }: { name: string | null; count: number; onCart?: () => void; onLogout?: () => void }) {
+export function Header({ name, count, onCart, onLogout, onLiveSettings }: { name: string | null; count: number; onCart?: () => void; onLogout?: () => void; onLiveSettings?: () => void }) {
   return (
     <header className="stripes">
       <div className="shop-topbar">
-        <Brand />
+        <Brand onLiveSettings={onLiveSettings} />
         <p className="shop-greeting">{name ? `${name}님` : "게스트님"}</p>
         {onCart && onLogout ? (
           <div className="flex justify-end gap-2">

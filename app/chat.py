@@ -57,11 +57,12 @@ class Link:
         self.sub = None
 
 
-async def publish_message(client, mid, uid, text):
+async def publish_message(client, mid, uid, text, *, is_bot=False):
     # Bots use the same persistence, cutover gate and Redis delivery as people.
     async with workload.gate():
         message = await asyncio.to_thread(save_message, mid, uid, text)
-    await client.publish(CHANNEL, json.dumps(message, ensure_ascii=False))
+    # Sender kind is set here, never trusted from a browser-provided message field.
+    await client.publish(CHANNEL, json.dumps(message | {"source": "bot" if is_bot else "human"}, ensure_ascii=False))
 
 
 def history():
@@ -196,7 +197,7 @@ async def chat(ws: WebSocket):
                         return
                     sequence += 1
                     await publish_message(link.client, str(uuid.uuid4()), f"공구봇 {(sequence - 1) % 8 + 1}",
-                                          f"{BOT_LINES[(sequence - 1) % len(BOT_LINES)]} · {sequence}")
+                                          f"{BOT_LINES[(sequence - 1) % len(BOT_LINES)]} · {sequence}", is_bot=True)
                 except Exception:
                     bot_rate = 0
                     await send({"type": "bot_state", "rate": 0,

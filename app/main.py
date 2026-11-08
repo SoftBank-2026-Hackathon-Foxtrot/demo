@@ -22,7 +22,7 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response, Query
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from redis.backoff import NoBackoff
@@ -179,21 +179,26 @@ def my_requests(x_session: str | None = Header(None)):
 
 
 @api.post("/live/orders/prepare")
-def prepare_order_demo(x_session: str | None = Header(None)):
-    user_of(x_session)
-    return order_demo.prepare()
+def prepare_order_demo(setup: order_demo.StockSetup | None = None, x_session: str | None = Header(None),
+                       idempotency_key: str | None = Header(None, min_length=1, max_length=96)):
+    uid = user_of(x_session)
+    if setup is not None and not idempotency_key:
+        raise HTTPException(400, "Idempotency-Key is required for new stock")
+    return order_demo.prepare(setup.stock if setup else None, uid, idempotency_key or "")
 
 
 @api.get("/live/orders")
-def order_demo_snapshot(x_session: str | None = Header(None)):
+def order_demo_snapshot(response: Response, x_session: str | None = Header(None),
+                        product_id: int = Query(order_demo.PRODUCT_ID, ge=order_demo.PRODUCT_ID, le=2147483647)):
     user_of(x_session)
-    return order_demo.snapshot()
+    response.headers["Cache-Control"] = "no-store"
+    return order_demo.snapshot(product_id)
 
 
 @api.post("/live/orders")
 def submit_order_demo(batch: order_demo.OrderBatch, x_session: str | None = Header(None),
                       idempotency_key: str = Header(..., min_length=1, max_length=96)):
-    return order_demo.submit(user_of(x_session), batch.count, idempotency_key, r)
+    return order_demo.submit(user_of(x_session), batch.count, idempotency_key, r, batch.product_id)
 
 
 @api.get("/me/receipts/{request_id}")

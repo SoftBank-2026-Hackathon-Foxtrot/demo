@@ -5,10 +5,12 @@ import { isOpen, Tile, won } from "./GoodsList";
 import { useChat } from "./useChat";
 import { MigrationStatus } from "./MigrationStatus";
 import { FloatingChat } from "./FloatingChat";
-import { OrderPulse } from "./OrderPulse";
+import { OrderPulse, type OrderControls } from "./OrderPulse";
+import { HumanChatSpotlight, LiveDialog } from "./LiveEffects";
 
-export function LiveRoom({ sid, name, goods, onPick, onSessionLost }: {
+export function LiveRoom({ sid, name, goods, onPick, onSessionLost, settingsOpen=false, onSettingsClose }: {
   sid: string; name: string | null; goods: GroupBuy[]; onPick: (g: GroupBuy) => void; onSessionLost: () => void;
+  settingsOpen?: boolean; onSettingsClose?: () => void;
 }) {
   const item = goods[0];
   const chat = useChat(sid, onSessionLost);
@@ -17,6 +19,7 @@ export function LiveRoom({ sid, name, goods, onPick, onSessionLost }: {
   const validBotRate = Number.isInteger(Number(botRate)) && Number(botRate) >= 1 && Number(botRate) <= 1000;
   const [liked, setLiked] = useState(false);
   const [dancing, setDancing] = useState(true);
+  const [orderControls,setOrderControls]=useState<OrderControls|null>(null);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -28,8 +31,8 @@ export function LiveRoom({ sid, name, goods, onPick, onSessionLost }: {
     <section className="live-section" aria-labelledby="live-title">
       <h1 id="live-title" className="sr-only">라이브 공구</h1>
       <MigrationStatus sid={sid} since={chat.measuredSince} liveIds={chat.liveIds} chatEnvironment={chat.info.environment} connected={chat.status === "connected"} onSessionLost={onSessionLost} />
-      <OrderPulse sid={sid} onSessionLost={onSessionLost}/>
-      <div className="chat-bot-controls live-traffic-controls"><div className="chat-bot-row"><button type="button" className={`chat-bot-toggle ${chat.bot.rate?"running":""}`} aria-pressed={chat.bot.rate>0} disabled={chat.status!=="connected"||(!chat.bot.rate&&!validBotRate)} onClick={()=>chat.setBotRate(chat.bot.rate?0:Number(botRate))}>{chat.bot.rate?<Pause size={14}/>:<Play size={14}/>} {chat.bot.rate?"채팅 정지":"채팅 시작"}</button><label htmlFor="chat-bot-rate" className="sr-only">초당 채팅 수</label><input id="chat-bot-rate" type="number" min={1} max={1000} step={1} value={botRate} aria-invalid={!validBotRate} onChange={e=>{setBotRate(e.target.value);const rate=Number(e.target.value);if(chat.bot.rate&&Number.isInteger(rate)&&rate>=1&&rate<=1000)chat.setBotRate(rate);}}/><span>개/초</span></div><p className={chat.bot.rate||!validBotRate?"":"sr-only"} role="status">{!validBotRate?"초당 1~1,000개로 입력해 주세요.":chat.bot.rate?`목표 ${chat.bot.rate.toLocaleString()}개/초`:"자동 채팅 대기 중"}</p>{chat.bot.error&&<p className="error" role="alert">{chat.bot.error}</p>}</div>
+      <OrderPulse sid={sid} onSessionLost={onSessionLost} onControlsChange={setOrderControls}/>
+      {settingsOpen && <LiveDialog title="LIVE 설정" onClose={onSettingsClose ?? (()=>{})}><div className="live-order-settings"><span>주문</span><button type="button" disabled={!orderControls?.running || orderControls.starting} onClick={()=>orderControls?.stop()}><Pause size={14}/>주문 정지</button></div><div className="chat-bot-controls live-traffic-controls"><div className="chat-bot-row"><button type="button" className={`chat-bot-toggle ${chat.bot.rate?"running":""}`} aria-pressed={chat.bot.rate>0} disabled={chat.status!=="connected"||(!chat.bot.rate&&!validBotRate)} onClick={()=>chat.setBotRate(chat.bot.rate?0:Number(botRate))}>{chat.bot.rate?<Pause size={14}/>:<Play size={14}/>} {chat.bot.rate?"채팅 정지":"채팅 시작"}</button><label htmlFor="chat-bot-rate" className="sr-only">초당 채팅 수</label><input id="chat-bot-rate" type="number" min={1} max={1000} step={1} value={botRate} aria-invalid={!validBotRate} onChange={e=>{setBotRate(e.target.value);const rate=Number(e.target.value);if(chat.bot.rate&&Number.isInteger(rate)&&rate>=1&&rate<=1000)chat.setBotRate(rate);}}/><span>개/초</span></div><p className={chat.bot.rate||!validBotRate?"":"sr-only"} role="status">{!validBotRate?"초당 1~1,000개로 입력해 주세요.":chat.bot.rate?`목표 ${chat.bot.rate.toLocaleString()}개/초`:"자동 채팅 대기 중"}</p>{chat.bot.error&&<p className="error" role="alert">{chat.bot.error}</p>}</div></LiveDialog>}
       <div className="broadcast-layout">
         <div className="broadcast-main">
           <div className={`broadcast-stage ${dancing ? "is-dancing" : "dance-paused"}`}>
@@ -44,6 +47,7 @@ export function LiveRoom({ sid, name, goods, onPick, onSessionLost }: {
             <button className="dance-toggle" aria-pressed={dancing} onClick={() => setDancing(!dancing)} aria-label={dancing ? "친구들 춤 멈추기" : "친구들 춤추기"}>{dancing ? <Pause size={13} weight="fill" /> : <Play size={13} weight="fill" />}<span>{dancing ? "댄스 타임" : "다시 춤추기"}</span></button>
             <button className={`stage-heart ${liked ? "is-liked" : ""}`} onClick={() => setLiked(!liked)} aria-label={liked ? "방송 좋아요 취소" : "방송 좋아요"} aria-pressed={liked}><Heart size={24} weight={liked ? "fill" : "regular"} /></button>
             <FloatingChat messages={chat.messages} liveIds={chat.liveIds.current}/>
+            <HumanChatSpotlight messages={chat.humanMessages}/>
             <form onSubmit={submit} className="stage-composer"><label htmlFor="live-message" className="sr-only">채팅 입력</label><div className="composer-input"><textarea id="live-message" rows={1} value={draft} maxLength={300} placeholder={chat.status==="connected"?"채팅으로 함께해요…":"채팅 재연결 중…"} disabled={chat.status !== "connected"} onChange={e=>setDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();e.currentTarget.form?.requestSubmit();}}}/><button aria-label="메시지 보내기" disabled={!draft.trim()||chat.status!=="connected"||!!chat.pending}><ArrowUp size={20} weight="bold"/></button></div>{chat.pending&&!chat.error&&<p className="stage-chat-feedback" role="status">메시지를 전달하고 있어요…</p>}{chat.error&&<p className="stage-chat-feedback" role="alert">{chat.error}{chat.pending&&<><button type="button" disabled={chat.status!=="connected"} onClick={()=>chat.send(chat.pending!.text,chat.pending!.id)}>다시 보내기</button><button type="button" onClick={()=>{setDraft(chat.pending!.text);chat.editPending();}}>수정하기</button></>}</p>}</form>
           </div>
           {item && <div className="featured-buy"><div className="product-number">01</div><Tile id={item.id} size={36} className="featured-tile" /><div className="featured-copy"><span>지금 만나고 있는 굿즈</span><h2>{item.title}</h2><p>{won(item.price)} <small>· 남은 수량 {item.stock.toLocaleString()}개</small></p></div><button disabled={!isOpen(item)} onClick={() => onPick(item)} className="buy-button"><ShoppingBag size={19} />{isOpen(item) ? "공구 참여" : "마감된 공구"}<ArrowRight size={18} /></button></div>}
