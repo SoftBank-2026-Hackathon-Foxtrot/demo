@@ -1,4 +1,4 @@
-# Opt-in local order traffic. The endpoint is disabled without this flag.
+# Explicit local order traffic setting; the app also enables this by default.
 services:
   app:
     environment:

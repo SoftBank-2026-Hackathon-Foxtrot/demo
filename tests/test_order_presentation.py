@@ -1,10 +1,27 @@
 import json
+import os
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 
 from app import chat, order_demo
+
+
+@pytest.mark.parametrize("value", [None, "1", "0"])
+def test_order_demo_defaults_to_enabled_and_respects_explicit_setting(value):
+    from fastapi import HTTPException
+    with patch.dict("os.environ"):
+        if value is None:
+            os.environ.pop("ENABLE_ORDER_DEMO", None)
+        else:
+            os.environ["ENABLE_ORDER_DEMO"] = value
+        if value == "0":
+            with pytest.raises(HTTPException) as error:
+                order_demo.enabled()
+            assert error.value.status_code == 404
+        else:
+            order_demo.enabled()
 
 
 def test_stock_bounds_and_product_defaults():

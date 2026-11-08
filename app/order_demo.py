@@ -21,7 +21,7 @@ class StockSetup(BaseModel):
 
 
 def enabled():
-    if os.environ.get("ENABLE_ORDER_DEMO") != "1":
+    if os.environ.get("ENABLE_ORDER_DEMO", "1") != "1":
         raise HTTPException(404, "order demo is disabled")
 
 
