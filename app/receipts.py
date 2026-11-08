@@ -10,7 +10,7 @@ from . import objroute
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 
 BUCKET = os.environ.get("S3_BUCKET", "receipts-aws")
 FALLBACK_BUCKET = os.environ.get("S3_FALLBACK_BUCKET", "receipts-gcp")
@@ -57,9 +57,20 @@ def put(request_id: str, receipt: dict) -> str:
     if route and route.following():
         route.put(key, body, "application/json")
         return key
-    client().put_object(Bucket=BUCKET, Key=key, Body=body,
-                        ContentType="application/json")
+    try:
+        client().put_object(Bucket=BUCKET, Key=key, Body=body,
+                            ContentType="application/json")
+    except NoCredentialsError:
+        _forget_client()
+        raise
     return key
+
+
+def _forget_client():
+    """The SDK resolves credentials once, when the client is made: one made without any keeps
+    failing. The next call makes a new one."""
+    global _client
+    _client = None
 
 
 def get(key: str) -> tuple[dict, str]:
@@ -75,6 +86,8 @@ def get(key: str) -> tuple[dict, str]:
         try:
             return json.loads(client().get_object(Bucket=bucket, Key=key)["Body"].read()), bucket
         except Exception as e:  # noqa: BLE001  a miss or an outage here: try the other bucket
+            if isinstance(e, NoCredentialsError):
+                _forget_client()
             failure = e
     if isinstance(failure, ClientError) and failure.response["Error"]["Code"] in ("NoSuchKey", "404"):
         raise ReceiptMissing(key)
