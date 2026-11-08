@@ -79,7 +79,7 @@ export function forgetSession() {
 
 export const me = (sid: string) => call<{ uid: string }>("/me", sid);
 export const listGroupBuys = (sid: string) => call<GroupBuy[]>("/groupbuys", sid);
-export const listOrders = (sid: string) => call<Order[]>("/me/requests", sid);
+export const listOrders = (sid: string, requestId?: string) => call<Order[]>(`/me/requests${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ""}`, sid);
 export const getReceipt = (sid: string, id: string) => call<Receipt>(`/me/receipts/${id}`, sid);
 export const getGroupBuy = (sid: string, id: number) => call<{ price: number }>(`/groupbuys/${id}`, sid);
 export type BaselineIds = Record<"chat" | "orders" | "requests" | "goods", string[]>;
@@ -99,7 +99,7 @@ export function newOrderKey(): string {
 export const join = (sid: string, id: number, qty: number, key: string) =>
   call<{ request_id: string }>(`/groupbuys/${id}/join?qty=${qty}`, sid, "POST", { "Idempotency-Key": key });
 
-export type OrderPulse = {stock:number;initial:number;title:string;accepted:number;confirmed:number;pending:number;sold_out:number;confirmed_qty:number;confirmed_per_second:number;at:number;product_id:number};
+export type OrderPulse = {stock:number;initial:number;title:string;accepted:number;confirmed:number;pending:number;sold_out:number;confirmed_qty:number;confirmed_per_second:number;at:number;product_id:number;my_confirmed:number};
 export const prepareOrderDemo = (sid:string,signal:AbortSignal)=>call<OrderPulse>("/live/orders/prepare",sid,"POST",{},undefined,signal);
 export const readOrderPulse = (sid:string,signal:AbortSignal,productId?:number)=>call<OrderPulse>(`/live/orders${productId?`?product_id=${productId}`:""}`,sid,"GET",{},undefined,signal);
 export const startOrderDemo = (sid:string,stock:number,key:string)=>call<OrderPulse>("/live/orders/prepare",sid,"POST",{"Idempotency-Key":key},{stock});

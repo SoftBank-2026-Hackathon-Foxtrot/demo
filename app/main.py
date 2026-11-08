@@ -169,12 +169,12 @@ def live_metrics(measurement: metrics.Measurement, x_session: str | None = Heade
 
 
 @api.get("/me/requests")
-def my_requests(x_session: str | None = Header(None)):
+def my_requests(x_session: str | None = Header(None), request_id: str | None = Query(None, min_length=1, max_length=128)):
     uid = user_of(x_session)
     rows = connect().execute(
         "SELECT r.request_id, g.title, r.qty, r.status, r.created_ms, o.receipt_key IS NOT NULL FROM join_requests r "
         "JOIN groupbuys g ON g.id = r.groupbuy_id LEFT JOIN orders o ON o.request_id = r.request_id "
-        "WHERE r.user_id=%s ORDER BY r.created_ms DESC LIMIT 50", (uid,)).fetchall()
+        "WHERE r.user_id=%s AND (%s::text IS NULL OR r.request_id=%s) ORDER BY r.created_ms DESC LIMIT 50", (uid, request_id, request_id)).fetchall()
     return [{"id": x[0], "title": x[1], "qty": x[2], "status": x[3], "created_ms": x[4], "receipt": x[5]} for x in rows]
 
 
@@ -190,9 +190,9 @@ def prepare_order_demo(setup: order_demo.StockSetup | None = None, x_session: st
 @api.get("/live/orders")
 def order_demo_snapshot(response: Response, x_session: str | None = Header(None),
                         product_id: int = Query(order_demo.PRODUCT_ID, ge=order_demo.PRODUCT_ID, le=2147483647)):
-    user_of(x_session)
+    uid = user_of(x_session)
     response.headers["Cache-Control"] = "no-store"
-    return order_demo.snapshot(product_id)
+    return order_demo.snapshot(product_id, uid=uid)
 
 
 @api.post("/live/orders")

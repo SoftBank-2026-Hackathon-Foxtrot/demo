@@ -5,7 +5,7 @@ import { isOpen, Tile, won } from "./GoodsList";
 import { useChat } from "./useChat";
 import { MigrationStatus } from "./MigrationStatus";
 import { FloatingChat } from "./FloatingChat";
-import { OrderPulse, type OrderControls } from "./OrderPulse";
+import { OrderPulse } from "./OrderPulse";
 import { HumanChatSpotlight, LiveDialog } from "./LiveEffects";
 
 export function LiveRoom({ sid, name, goods, onPick, onSessionLost, settingsOpen=false, onSettingsClose }: {
@@ -19,7 +19,7 @@ export function LiveRoom({ sid, name, goods, onPick, onSessionLost, settingsOpen
   const validBotRate = Number.isInteger(Number(botRate)) && Number(botRate) >= 1 && Number(botRate) <= 1000;
   const [liked, setLiked] = useState(false);
   const [dancing, setDancing] = useState(true);
-  const [orderControls,setOrderControls]=useState<OrderControls|null>(null);
+  const [orderSettingsTarget,setOrderSettingsTarget]=useState<HTMLDivElement|null>(null);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -31,8 +31,8 @@ export function LiveRoom({ sid, name, goods, onPick, onSessionLost, settingsOpen
     <section className="live-section" aria-labelledby="live-title">
       <h1 id="live-title" className="sr-only">라이브 공구</h1>
       <MigrationStatus sid={sid} since={chat.measuredSince} liveIds={chat.liveIds} chatEnvironment={chat.info.environment} connected={chat.status === "connected"} onSessionLost={onSessionLost} />
-      <OrderPulse sid={sid} onSessionLost={onSessionLost} onControlsChange={setOrderControls}/>
-      {settingsOpen && <LiveDialog title="LIVE 설정" onClose={onSettingsClose ?? (()=>{})}><div className="live-order-settings"><span>주문</span><button type="button" disabled={!orderControls?.running || orderControls.starting} onClick={()=>orderControls?.stop()}><Pause size={14}/>주문 정지</button></div><div className="chat-bot-controls live-traffic-controls"><div className="chat-bot-row"><button type="button" className={`chat-bot-toggle ${chat.bot.rate?"running":""}`} aria-pressed={chat.bot.rate>0} disabled={chat.status!=="connected"||(!chat.bot.rate&&!validBotRate)} onClick={()=>chat.setBotRate(chat.bot.rate?0:Number(botRate))}>{chat.bot.rate?<Pause size={14}/>:<Play size={14}/>} {chat.bot.rate?"채팅 정지":"채팅 시작"}</button><label htmlFor="chat-bot-rate" className="sr-only">초당 채팅 수</label><input id="chat-bot-rate" type="number" min={1} max={1000} step={1} value={botRate} aria-invalid={!validBotRate} onChange={e=>{setBotRate(e.target.value);const rate=Number(e.target.value);if(chat.bot.rate&&Number.isInteger(rate)&&rate>=1&&rate<=1000)chat.setBotRate(rate);}}/><span>개/초</span></div><p className={chat.bot.rate||!validBotRate?"":"sr-only"} role="status">{!validBotRate?"초당 1~1,000개로 입력해 주세요.":chat.bot.rate?`목표 ${chat.bot.rate.toLocaleString()}개/초`:"자동 채팅 대기 중"}</p>{chat.bot.error&&<p className="error" role="alert">{chat.bot.error}</p>}</div></LiveDialog>}
+      <OrderPulse sid={sid} onSessionLost={onSessionLost} settingsTarget={orderSettingsTarget}/>
+      {settingsOpen && <LiveDialog title="LIVE 설정" onClose={onSettingsClose ?? (()=>{})}><div ref={setOrderSettingsTarget}/><div className="chat-bot-controls live-traffic-controls"><div className="chat-bot-row"><button type="button" className={`chat-bot-toggle ${chat.bot.rate?"running":""}`} aria-pressed={chat.bot.rate>0} disabled={chat.status!=="connected"||(!chat.bot.rate&&!validBotRate)} onClick={()=>chat.setBotRate(chat.bot.rate?0:Number(botRate))}>{chat.bot.rate?<Pause size={14}/>:<Play size={14}/>} {chat.bot.rate?"채팅 정지":"채팅 시작"}</button><label htmlFor="chat-bot-rate" className="sr-only">초당 채팅 수</label><input id="chat-bot-rate" type="number" min={1} max={1000} step={1} value={botRate} aria-invalid={!validBotRate} onChange={e=>{setBotRate(e.target.value);const rate=Number(e.target.value);if(chat.bot.rate&&Number.isInteger(rate)&&rate>=1&&rate<=1000)chat.setBotRate(rate);}}/><span>개/초</span></div><p className={chat.bot.rate||!validBotRate?"":"sr-only"} role="status">{!validBotRate?"초당 1~1,000개로 입력해 주세요.":chat.bot.rate?`목표 ${chat.bot.rate.toLocaleString()}개/초`:"자동 채팅 대기 중"}</p>{chat.bot.error&&<p className="error" role="alert">{chat.bot.error}</p>}</div></LiveDialog>}
       <div className="broadcast-layout">
         <div className="broadcast-main">
           <div className={`broadcast-stage ${dancing ? "is-dancing" : "dance-paused"}`}>

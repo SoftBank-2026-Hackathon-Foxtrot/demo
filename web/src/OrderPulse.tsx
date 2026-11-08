@@ -1,6 +1,7 @@
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Play } from "@phosphor-icons/react";
-import { ApiError, newOrderKey, prepareOrderDemo, readOrderPulse, sendOrderBatch, startOrderDemo, SessionLost, type OrderPulse as Snapshot } from "./api";
+import { Pause, Play } from "@phosphor-icons/react";
+import { ApiError, join, listOrders, newOrderKey, prepareOrderDemo, readOrderPulse, sendOrderBatch, startOrderDemo, SessionLost, type OrderPulse as Snapshot } from "./api";
 import "./order-pulse.css";
 import { JoinQr } from "./LiveEffects";
 
@@ -15,8 +16,7 @@ function failure(error: unknown) {
   }
   return "주문 현황을 불러오지 못했어요. 다시 확인 중이에요.";
 }
-export type OrderControls = {running:boolean;starting:boolean;stop:()=>void};
-export function OrderPulse({ sid, onSessionLost, onControlsChange }: { sid: string; onSessionLost: () => void; onControlsChange?:(controls:OrderControls)=>void }) {
+export function OrderPulse({ sid, onSessionLost, settingsTarget }: { sid: string; onSessionLost: () => void; settingsTarget?:HTMLElement|null }) {
   const storageKey = `order-demo-product:${sid}`;
   const product = useRef(savedProduct(storageKey));
   const revision = useRef(0);
@@ -30,6 +30,11 @@ export function OrderPulse({ sid, onSessionLost, onControlsChange }: { sid: stri
   const [pollError, setPollError] = useState("");
   const [unavailable, setUnavailable] = useState(false);
   const [sendError, setSendError] = useState("");
+  const [buying, setBuying] = useState(false);
+  const [personalOrder, setPersonalOrder] = useState<string | null>(null);
+  const [buyStatus, setBuyStatus] = useState("");
+  const manual = useRef<{key:string;productId:number} | null>(null);
+  const buyingNow = useRef(false);
   const active = useRef(false);
   const count = useRef(10);
   const batch = useRef<{ count: number; key: string; productId?: number } | null>(null);
@@ -38,8 +43,43 @@ export function OrderPulse({ sid, onSessionLost, onControlsChange }: { sid: stri
   const validStock = Number.isInteger(Number(stock)) && Number(stock) >= 1 && Number(stock) <= 1_000_000;
   count.current = validRate ? Number(rate) : 10;
   const stopOrders=useCallback(()=>{active.current=false;setRunning(false);},[]);
-  useEffect(()=>{onControlsChange?.({running,starting,stop:stopOrders});},[running,starting,stopOrders,onControlsChange]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  useEffect(() => {
+    if (!personalOrder) return;
+    const requestId = personalOrder;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    async function check() {
+      try {
+        const order = (await listOrders(sid, requestId)).find(item => item.id === requestId);
+        if (stopped) return;
+        if (order && order.status !== "QUEUED") {
+          setBuyStatus(order.status === "CONFIRMED" ? "주문 확정" : "품절로 주문되지 않았어요.");
+          setPersonalOrder(null);
+          return;
+        }
+      } catch (error) { if (!stopped && error instanceof SessionLost) { onSessionLost(); return; } }
+      if (!stopped) timer = setTimeout(check, 1000);
+    }
+    void check();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [personalOrder, sid, onSessionLost]);
+  async function buyOne() {
+    if (buyingNow.current || personalOrder || !data || pollError || unavailable || (data.stock <= 0 && !manual.current)) return;
+    buyingNow.current = true; setBuying(true); setBuyStatus("");
+    const pending = manual.current ?? {key:newOrderKey(),productId:data.product_id};
+    manual.current = pending;
+    try {
+      const result = await join(sid, pending.productId, 1, pending.key);
+      manual.current = null;
+      if (alive.current) { setPersonalOrder(result.request_id); setBuyStatus("내 주문 접수 · 처리 중"); }
+    } catch (error) {
+      if (alive.current) {
+        if (error instanceof SessionLost) onSessionLost();
+        else setBuyStatus(error instanceof ApiError && error.status === 429 ? "잠시 후 다시 눌러 주세요." : "주문 확인이 필요해요. 다시 누르면 같은 주문으로 확인해요.");
+      }
+    } finally { buyingNow.current = false; if (alive.current) setBuying(false); }
+  }
   useEffect(() => {
     let stopped = false;
     let initialized = product.current !== undefined;
@@ -129,10 +169,16 @@ export function OrderPulse({ sid, onSessionLost, onControlsChange }: { sid: stri
   return <section className="order-pulse" aria-label="실시간 주문 현황">
     <div className="order-pulse-heading"><div className="order-pulse-product"><strong>{data?.title ?? "주문"}</strong><span>{unavailable ? "설정 필요" : pollError ? "갱신 대기" : data ? `${data.confirmed_per_second.toFixed(1)}건/초` : "준비"}</span></div><JoinQr productId={data?.product_id}/></div>
     <dl className="order-counters">
-      <div><dt><label htmlFor="order-stock">남은 재고</label></dt><dd>{running ? number(data?.stock) : <input id="order-stock" aria-label="남은 재고" type="number" inputMode="numeric" min="1" max="1000000" value={stock} disabled={starting} aria-invalid={edited.current && !validStock} onChange={event => { edited.current = true; setStock(event.target.value); }} />}</dd></div>
+      <div><dt>남은 재고</dt><dd>{number(data?.stock)}</dd></div>
       {[["접수된 참여", data?.accepted], ["확정 주문", data?.confirmed], ["처리 대기", data?.pending]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{number(value as number | undefined)}</dd></div>)}
     </dl>
-    <div className="order-pulse-controls"><button type="button" className={running ? "running" : ""} aria-pressed={running} disabled={starting || running || !validStock || !validRate || unavailable} onClick={() => void startOrders()}>{running ? <span className="order-running-dot" aria-hidden="true"/> : <Play size={13} weight="fill" />}{starting ? "준비 중" : running ? "주문 중" : "주문 시작"}</button><label htmlFor="order-rate" className="sr-only">초당 주문 목표 건수</label><input id="order-rate" type="number" min="1" max="100" value={rate} aria-invalid={!validRate} disabled={running || starting} onChange={event => setRate(event.target.value)} /><span>건/초</span>{data && data.sold_out > 0 && <span className="order-rejected">품절 {data.sold_out.toLocaleString()}</span>}</div>
-    {(!validRate || (edited.current && !validStock) || pollError || sendError) && <p role="status" className="order-pulse-error">{!validRate ? "주문은 1~100건으로 입력해 주세요." : edited.current && !validStock ? "재고는 1~1,000,000개로 입력해 주세요." : sendError || pollError}</p>}
+    <div className="order-pulse-controls"><button type="button" className="order-buy-one" disabled={buying || !!personalOrder || starting || !data || !!pollError || unavailable || (data.stock <= 0 && !manual.current)} onClick={() => void buyOne()}>{buying ? "접수 중" : personalOrder ? "처리 중" : manual.current ? "주문 재확인" : data?.stock === 0 ? "품절" : "1개 주문 요청"}</button></div>
+    {(buyStatus || !!data?.my_confirmed) && <p role="status" className="order-buy-status">{!!data?.my_confirmed && <strong>내 주문 {data.my_confirmed.toLocaleString()}개 확정</strong>}{buyStatus && buyStatus !== "주문 확정" && <span>{data?.my_confirmed ? " · " : ""}{buyStatus}</span>}</p>}
+    {pollError && <p role="status" className="order-pulse-error">{pollError}</p>}
+    {settingsTarget && createPortal(<div className="order-macro-settings">
+      <label htmlFor="order-stock">시작 재고<input id="order-stock" aria-label="시작 재고" type="number" inputMode="numeric" min="1" max="1000000" value={stock} disabled={running || starting} aria-invalid={edited.current && !validStock} onChange={event=>{edited.current=true;setStock(event.target.value);}}/></label>
+      <div className="order-pulse-controls"><button type="button" disabled={starting || running || !validStock || !validRate || unavailable} onClick={()=>void startOrders()}><Play size={13} weight="fill"/>{starting ? "준비 중" : running ? "주문 중" : "주문 시작"}</button><input id="order-rate" aria-label="초당 주문 목표 건수" type="number" min="1" max="100" value={rate} disabled={running || starting} onChange={event=>setRate(event.target.value)}/><span>건/초</span><button type="button" disabled={!running || starting} onClick={stopOrders}><Pause size={13}/>주문 정지</button></div>
+      {(!validRate || (edited.current && !validStock) || sendError) && <p role="status" className="order-pulse-error">{!validRate ? "주문은 1~100건으로 입력해 주세요." : edited.current && !validStock ? "재고는 1~1,000,000개로 입력해 주세요." : sendError}</p>}
+    </div>,settingsTarget)}
   </section>;
 }

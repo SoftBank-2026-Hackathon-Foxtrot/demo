@@ -18,7 +18,7 @@ def test_setup_retry_uses_the_same_product_and_does_not_overwrite_stock():
     from unittest.mock import MagicMock
     db = MagicMock()
     db.execute.return_value.fetchone.return_value = (123,)
-    with patch.dict("os.environ", {"ENABLE_ORDER_DEMO": "1"}), patch.object(order_demo, "connect", return_value=db), patch.object(order_demo, "snapshot", side_effect=lambda product_id: {"product_id": product_id}):
+    with patch.dict("os.environ", {"ENABLE_ORDER_DEMO": "1"}), patch.object(order_demo, "connect", return_value=db), patch.object(order_demo, "snapshot", side_effect=lambda product_id, **kwargs: {"product_id": product_id}):
         first = order_demo.prepare(25, "tester", "same-key")
         second = order_demo.prepare(25, "tester", "same-key")
         other = order_demo.prepare(25, "tester", "new-key")

@@ -41,10 +41,10 @@ def prepare(stock: int | None = None, uid: str = "", key: str = ""):
         existing = connect().execute("SELECT initial FROM groupbuys WHERE id=%s", (product_id,)).fetchone()
         if existing is None or existing[0] != quantity:
             raise HTTPException(409, "setup key already used for different stock")
-    return snapshot(product_id)
+    return snapshot(product_id, uid=uid)
 
 
-def snapshot(product_id: int = PRODUCT_ID):
+def snapshot(product_id: int = PRODUCT_ID, *, uid: str = ""):
     enabled()
     now = int(time.time() * 1000)
     row = connect().execute(
@@ -59,7 +59,8 @@ def snapshot(product_id: int = PRODUCT_ID):
     ).fetchone()
     if row is None:
         raise HTTPException(404, "prepare demo product first")
-    return dict(stock=row[0], initial=row[1], title=row[2], accepted=row[3], confirmed=row[4],
+    my_confirmed = connect().execute("SELECT COALESCE(SUM(qty),0) FROM orders WHERE groupbuy_id=%s AND user_id=%s", (product_id,uid)).fetchone()[0] if uid else 0
+    return dict(stock=row[0], initial=row[1], title=row[2], accepted=row[3], confirmed=row[4], my_confirmed=my_confirmed,
                 pending=row[5], sold_out=row[6], confirmed_qty=row[7], confirmed_per_second=row[8] / 5,
                 at=now, product_id=product_id)
 
